@@ -2,36 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Interview Note Summarizer — Pitch</title>
+<title>Interview Note Summarizer — Full Deck</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
-    --bg: #0b0d12;
-    --fg: #f2f4f8;
-    --muted: #9aa4b2;
-    --accent: #7dd3fc;
-    --accent2: #a78bfa;
-    --card: #131720;
-    --border: #232a37;
+    --bg: #0b0d12; --fg: #f2f4f8; --muted: #9aa4b2;
+    --accent: #7dd3fc; --accent2: #a78bfa;
+    --card: #131720; --border: #232a37;
+    --good: #4ade80; --warn: #fbbf24;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f7f8fa;
-      --fg: #14181f;
-      --muted: #5b6472;
-      --accent: #0ea5e9;
-      --accent2: #7c3aed;
-      --card: #ffffff;
-      --border: #e2e6ec;
+      --bg: #f7f8fa; --fg: #14181f; --muted: #5b6472;
+      --accent: #0ea5e9; --accent2: #7c3aed;
+      --card: #ffffff; --border: #e2e6ec;
+      --good: #16a34a; --warn: #b45309;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0b0d12; --fg: #f2f4f8; --muted: #9aa4b2;
     --accent: #7dd3fc; --accent2: #a78bfa; --card: #131720; --border: #232a37;
+    --good: #4ade80; --warn: #fbbf24;
   }
   :root[data-theme="light"] {
     --bg: #f7f8fa; --fg: #14181f; --muted: #5b6472;
     --accent: #0ea5e9; --accent2: #7c3aed; --card: #ffffff; --border: #e2e6ec;
+    --good: #16a34a; --warn: #b45309;
   }
 
   * { box-sizing: border-box; }
@@ -39,111 +35,143 @@
     margin: 0; padding: 0; height: 100%;
     background: var(--bg); color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-    overflow: hidden;
   }
 
-  .deck { position: relative; width: 100%; height: 100vh; }
+  .deck { position: relative; width: 100%; height: 100vh; overflow: hidden; }
 
   .slide {
     position: absolute; inset: 0;
     display: none;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
-    text-align: center;
-    padding: 6vh 8vw;
+    padding: 5vh 6vw 9vh 6vw;
     opacity: 0;
-    transition: opacity .25s ease;
+    transition: opacity .2s ease;
+    overflow-y: auto;
   }
   .slide.active { display: flex; opacity: 1; }
 
   .eyebrow {
     color: var(--accent);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    font-size: clamp(0.7rem, 1.4vw, 0.95rem);
-    font-weight: 600;
-    margin-bottom: 1.2em;
+    font-size: clamp(0.68rem, 1.2vw, 0.85rem);
+    font-weight: 700;
+    margin-bottom: 0.6em;
   }
 
   h1 {
-    font-size: clamp(1.6rem, 4.2vw, 3.4rem);
-    line-height: 1.15;
+    font-size: clamp(1.3rem, 3vw, 2.3rem);
+    line-height: 1.2;
     margin: 0 0 0.5em 0;
-    max-width: 18ch;
-    background: linear-gradient(90deg, var(--fg), var(--fg));
+    max-width: 32ch;
   }
-
+  h2.section-title {
+    font-size: clamp(1.4rem, 3.2vw, 2.5rem);
+    margin: 0 0 0.7em 0;
+  }
   .highlight {
     background: linear-gradient(90deg, var(--accent), var(--accent2));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-
   .sub {
     color: var(--muted);
-    font-size: clamp(0.95rem, 1.6vw, 1.3rem);
-    max-width: 46ch;
-    line-height: 1.5;
+    font-size: clamp(0.9rem, 1.4vw, 1.15rem);
+    max-width: 60ch;
+    line-height: 1.55;
+    margin-bottom: 1em;
   }
 
-  .demo-card {
-    border: 1px dashed var(--border);
-    border-radius: 16px;
-    padding: 4vh 6vw;
-    color: var(--muted);
+  .content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1em;
+    margin-top: 0.5em;
+    width: 100%;
+    max-width: 1100px;
   }
-  .demo-card .url {
-    display: inline-block;
-    margin-top: 1em;
-    padding: 0.5em 1em;
+  .card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 12px;
+    padding: 1.1em 1.3em;
+  }
+  .card h3 {
+    margin: 0 0 0.4em 0;
+    font-size: 1rem;
     color: var(--accent);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: clamp(0.75rem, 1.6vw, 1rem);
-    word-break: break-all;
+  }
+  .card p, .card ul { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+  .card ul { padding-left: 1.1em; }
+  .card li { margin-bottom: 0.3em; }
+
+  ul.bullets { max-width: 62ch; padding-left: 1.2em; margin: 0.3em 0; }
+  ul.bullets li { margin-bottom: 0.55em; line-height: 1.5; font-size: clamp(0.9rem, 1.5vw, 1.05rem); }
+  ul.bullets b { color: var(--fg); }
+  ul.bullets .muted-line { color: var(--muted); }
+
+  .flow {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em;
+    max-width: 1100px; margin-top: 0.5em;
+  }
+  .flow-step {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.8em 1em; font-size: 0.85rem; min-width: 150px; flex: 1 1 150px;
+  }
+  .flow-step b { display: block; color: var(--accent); margin-bottom: 0.2em; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .flow-arrow { color: var(--muted); font-size: 1.3rem; flex: 0 0 auto; }
+
+  table.arch {
+    width: 100%; max-width: 900px; border-collapse: collapse; margin-top: 0.5em;
+    font-size: clamp(0.8rem, 1.3vw, 0.95rem);
+  }
+  table.arch th, table.arch td {
+    text-align: left; padding: 0.6em 0.8em; border-bottom: 1px solid var(--border);
+  }
+  table.arch th { color: var(--accent); font-weight: 600; }
+  table.arch td.muted { color: var(--muted); }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 0.5em; margin-top: 0.6em; }
+  .pill {
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.35em 0.9em; font-size: 0.8rem; color: var(--fg);
+  }
+  .pill.good { border-color: var(--good); color: var(--good); }
+
+  .status-line { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.5em; font-size: 0.92rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: 0 0 auto; }
+  .dot.warn { background: var(--warn); }
+
+  .demo-card {
+    border: 1px dashed var(--border); border-radius: 16px;
+    padding: 3vh 5vw; color: var(--muted); align-self: center; text-align: center; margin-top: 1em;
+  }
+  .demo-card .url {
+    display: inline-block; margin-top: 1em; padding: 0.5em 1em;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: clamp(0.7rem, 1.5vw, 0.95rem); word-break: break-all;
   }
 
   .notes {
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    max-height: 40vh;
-    overflow-y: auto;
-    background: var(--card);
-    border-top: 1px solid var(--border);
-    padding: 2vh 6vw;
-    text-align: left;
-    color: var(--fg);
-    font-size: clamp(0.85rem, 1.3vw, 1.05rem);
-    line-height: 1.55;
-    transform: translateY(100%);
-    transition: transform .2s ease;
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 38vh; overflow-y: auto;
+    background: var(--card); border-top: 1px solid var(--border);
+    padding: 2vh 6vw; text-align: left; color: var(--fg);
+    font-size: clamp(0.8rem, 1.2vw, 1rem); line-height: 1.55;
+    transform: translateY(100%); transition: transform .2s ease; z-index: 10;
   }
   .notes.open { transform: translateY(0); }
   .notes strong { color: var(--accent); }
 
   .chrome {
-    position: fixed;
-    bottom: 1.2em; left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 1em;
-    color: var(--muted);
-    font-size: 0.85rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    position: fixed; bottom: 1em; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 1em; color: var(--muted);
+    font-size: 0.8rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--bg); padding: 0.3em 0.8em; border-radius: 10px; z-index: 11;
   }
   .chrome button {
-    background: var(--card);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    border-radius: 8px;
-    padding: 0.4em 0.8em;
-    cursor: pointer;
-    font-size: 0.85rem;
+    background: var(--card); border: 1px solid var(--border); color: var(--fg);
+    border-radius: 8px; padding: 0.35em 0.75em; cursor: pointer; font-size: 0.8rem;
   }
   .chrome button:hover { border-color: var(--accent); }
   .hint { opacity: 0.7; }
@@ -153,37 +181,175 @@
 
 <div class="deck">
 
-  <section class="slide active" data-notes="Every interviewer takes notes their own way — different length, different focus, different phrasing for the same thing. When it's time to decide, someone has to re-read all of it and manually figure out: what's the strength, what's the concern, what's the actual recommendation. That re-reading is where time gets lost, and where two people reading the same notes can walk away with different conclusions.">
-    <div class="eyebrow">The Problem</div>
-    <h1>After every interview, HR is left with raw notes and <span class="highlight">no consistent way</span> to turn them into a decision.</h1>
-  </section>
-
-  <section class="slide" data-notes="A keyword script could flag words like 'communication' or 'leadership' — it can't tell you someone was hesitant about leading a team when the notes never say that directly. This agent reads the notes the way a person would: it infers what's only implied, weighs conflicting signals — strong technical answers but a hesitant tone about teamwork, say — into one overall judgment, and returns it in the same structure every time: strengths, concerns, rating, recommendation. That consistency, from messy human notes, is the part a script can't do.">
-    <div class="eyebrow">The Agent</div>
-    <h1>Not a script. A <span class="highlight">judgment call</span>, made consistently, every time.</h1>
-  </section>
-
-  <section class="slide" data-notes="Switch to the browser now and run the live sequence from 04_DEMO_SCRIPT_TEMPLATE.md. Budget ~2:30. Read the result out loud, don't just point at the screen.">
-    <div class="eyebrow">Live Demo</div>
-    <div class="demo-card">
-      <div>Switch to the browser now →</div>
-      <div class="url">firm-pee-records-distribute.trycloudflare.com</div>
+  <!-- 1: Title -->
+  <section class="slide active">
+    <div class="eyebrow">Hackathon Submission</div>
+    <h1 style="max-width:24ch">Interview Note Summarizer</h1>
+    <p class="sub">An AI agent that turns raw, hand-typed interview notes into a
+    structured hiring judgment — strengths, concerns, rating, recommendation — built
+    solo, in one day, with Claude Code.</p>
+    <div class="pill-row">
+      <span class="pill">Streamlit</span>
+      <span class="pill">Claude API</span>
+      <span class="pill">SQLite</span>
+      <span class="pill">Docker</span>
+      <span class="pill">Kubernetes</span>
+      <span class="pill good">Live &amp; deployed</span>
     </div>
   </section>
 
-  <section class="slide" data-notes="If re-reading and writing up a summary of one candidate's notes takes ten to fifteen minutes, and a hiring manager does this for every candidate in a pipeline, that adds up fast across a hiring season — and it's not just time, it's consistency: the same candidate's notes get judged the same way regardless of who's doing the summarizing that day. This isn't replacing the hiring decision — it's removing the manual re-reading step before that decision gets made.">
-    <div class="eyebrow">Impact / ROI</div>
-    <h1><span class="highlight">~10–15 minutes</span> saved per interview, per candidate, on the summarization step alone.</h1>
+  <!-- 2: Problem -->
+  <section class="slide" data-notes="Every interviewer takes notes their own way — different length, different focus, different phrasing for the same thing. When it's time to decide, someone has to re-read all of it and manually figure out: what's the strength, what's the concern, what's the actual recommendation. That re-reading is where time gets lost, and where two people reading the same notes can walk away with different conclusions.">
+    <div class="eyebrow">The Problem</div>
+    <h2 class="section-title">Raw notes pile up. <span class="highlight">Decisions don't get easier.</span></h2>
+    <ul class="bullets">
+      <li><b>Inconsistent input:</b> every interviewer writes notes differently — length, focus, phrasing all vary.</li>
+      <li><b>Manual re-reading:</b> turning notes into a decision means someone re-reads everything by hand, every time.</li>
+      <li><b>No consistency:</b> two people reading the same notes can reach different conclusions — nothing forces a structured read.</li>
+      <li class="muted-line"><b>Cost:</b> roughly 10–15 minutes of re-reading and write-up per candidate, per interviewer.</li>
+    </ul>
   </section>
 
-  <section class="slide" data-notes="What's built today is deliberately narrow — one candidate, one set of notes, one structured summary — because that's the smallest piece that proves the core idea works. The natural next steps, not built yet: ranking a full shortlist against each other with reasoning, not just a score; and letting HR ask something like 'who scored well on system design?' across everyone's stored history. Both reuse the exact same storage and agent pattern already working here — this isn't a stretch, it's the same architecture extended.">
-    <div class="eyebrow">Product Viability / What's Next</div>
-    <h1>Today: summarize one candidate. Next: <span class="highlight">rank a shortlist</span>, and answer questions across everyone's history.</h1>
+  <!-- 3: Market gap -->
+  <section class="slide">
+    <div class="eyebrow">Market Gap — Why This Is Sellable</div>
+    <h2 class="section-title">Nothing else summarizes <span class="highlight">notes you already typed</span>.</h2>
+    <div class="content-grid">
+      <div class="card">
+        <h3>Greenhouse / Lever (ATS)</h3>
+        <p>Free-text scorecard field only. No summarization, no structure, no judgment — just a box to type into.</p>
+      </div>
+      <div class="card">
+        <h3>BrightHire / Metaview / HireVue</h3>
+        <p>Real AI summarization — but only from <b style="color:var(--fg)">recorded/transcribed calls</b>, needs integration setup, enterprise pricing.</p>
+      </div>
+      <div class="card">
+        <h3>This tool</h3>
+        <p>Takes notes HR <b style="color:var(--fg)">already types by hand</b> and returns a structured, judgment-based summary in seconds — zero setup, zero integration.</p>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:0.9em">That gap — not "it uses AI" — is the actual product wedge: same-day value with no recording pipeline, no call integration, no enterprise onboarding.</p>
   </section>
 
-  <section class="slide" data-notes="I'm a QE tester, not a developer, and this was built in one day using Claude Code. Instead of one continuous conversation, the work was split across specialized sub-agents: one for the architecture and stack decision, one for implementation in two sprints, and — this is the part I'd call out specifically — a separate adversarial QE pass, run the way I'd run a real test cycle: trying blank input, malformed input, repeated runs, and checking that nothing showed a raw error to a user. That pass actually caught and fixed a real bug — a confusing double error message when no API key was configured — before I ever saw the app myself. And when deployment hit a wall — company policy blocked the API key and the usual cloud hosting options — Claude Code helped diagnose each failure directly from the actual error output and pivot to a local Kubernetes setup with a public tunnel, rather than getting stuck. That troubleshooting is part of the deliverable too, not just the app.">
+  <!-- 4: Architecture / Tech stack -->
+  <section class="slide">
+    <div class="eyebrow">Architecture &amp; Tech Stack</div>
+    <h2 class="section-title">Boring on purpose — except where it counts.</h2>
+    <table class="arch">
+      <tr><th>Layer</th><th>Choice</th><th>Why</th></tr>
+      <tr><td>Interface</td><td>Streamlit (Python)</td><td class="muted">One file, no hand-written HTML/CSS/JS, looks finished out of the box</td></tr>
+      <tr><td>Agent / reasoning</td><td>Claude API — forced tool-use, structured JSON output</td><td class="muted">The one place complexity is worth spending — see next slide</td></tr>
+      <tr><td>Storage</td><td>SQLite (<code>candidates.db</code>)</td><td class="muted">No DB server, no ORM, trivial to inspect, survives process lifetime</td></tr>
+      <tr><td>Containerization</td><td>Docker</td><td class="muted">Portable, identical image runs anywhere</td></tr>
+      <tr><td>Orchestration</td><td>Kubernetes (minikube locally; AKS-ready)</td><td class="muted">Same manifests scale to a real company cluster unchanged</td></tr>
+      <tr><td>Public access</td><td>Cloudflare Tunnel</td><td class="muted">Zero-signup public URL — sidesteps account/OAuth policy blocks</td></tr>
+    </table>
+    <p class="sub" style="margin-top:0.8em">Deployment path pivoted twice today — Streamlit Cloud (hit a Python 3.14/pillow build issue, fixed) → company API/OAuth policy blocks → local Kubernetes + tunnel. Same app code, unchanged, through all three.</p>
+  </section>
+
+  <!-- 5: App flow -->
+  <section class="slide" data-notes="Walk through this exact sequence live on the next slide.">
+    <div class="eyebrow">App Flow</div>
+    <h2 class="section-title">One straight path, start to persisted record.</h2>
+    <div class="flow">
+      <div class="flow-step"><b>1. Open</b>Pick or add a candidate</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><b>2. Input</b>Paste free-text interview notes</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><b>3. Reason</b>Claude: forced tool-call, structured schema</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><b>4. Result</b>Strengths / Concerns / Rating / Recommendation</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><b>5. Save</b>Written to SQLite</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step"><b>6. Reopen</b>Notes + summary reload automatically</div>
+    </div>
+  </section>
+
+  <!-- 6: Why an agent -->
+  <section class="slide" data-notes="A keyword script could flag words like 'communication' or 'leadership' — it can't tell you someone was hesitant about leading a team when the notes never say that directly. This agent reads the notes the way a person would: it infers what's only implied, weighs conflicting signals into one overall judgment, and returns it in the same structure every time.">
+    <div class="eyebrow">Why This Is an Agent, Not a Script</div>
+    <h2 class="section-title">A script matches keywords. This <span class="highlight">makes a judgment call.</span></h2>
+    <ul class="bullets">
+      <li><b>Script:</b> keyword-matches — "mentions 'communication'" → tag as soft skill. Brittle, misses anything unstated.</li>
+      <li><b>Agent:</b> infers concerns the notes only imply, never state outright.</li>
+      <li><b>Agent:</b> weighs conflicting signals — strong technical answers but a hesitant tone about teamwork — into <i>one</i> overall recommendation.</li>
+      <li><b>Agent:</b> returns that judgment in the same fixed structure every time, regardless of how messy or differently-worded the input is.</li>
+    </ul>
+  </section>
+
+  <!-- 7: What was built / verified -->
+  <section class="slide">
+    <div class="eyebrow">What Was Built &amp; Verified Today</div>
+    <h2 class="section-title">Working, tested, and honestly documented.</h2>
+    <div class="status-line"><span class="dot"></span> Candidate management — pick/add, persisted list</div>
+    <div class="status-line"><span class="dot"></span> AI structured summarization — strengths / concerns / rating / recommendation</div>
+    <div class="status-line"><span class="dot"></span> Persistent storage — SQLite, survives reload</div>
+    <div class="status-line"><span class="dot warn"></span> Mocked demo-mode fallback — runs with zero API key, auto-upgrades to live Claude calls with no code change</div>
+    <div class="status-line"><span class="dot"></span> Adversarial QE pass complete — blank/malformed input handled, no raw stack traces, 1 real bug found &amp; fixed pre-launch</div>
+    <div class="status-line"><span class="dot"></span> Publicly deployed and reachable right now (Kubernetes + Cloudflare Tunnel)</div>
+    <p class="sub" style="margin-top:0.8em">QE verdict: <b style="color:var(--good)">GO</b> — safe to demo as scripted, with one known, documented UX edge (drafts aren't saved until you click Save).</p>
+  </section>
+
+  <!-- 8: Token / cost efficiency -->
+  <section class="slide">
+    <div class="eyebrow">Token &amp; Cost Efficiency</div>
+    <h2 class="section-title">Designed to keep every call <span class="highlight">small and predictable.</span></h2>
+    <div class="content-grid">
+      <div class="card"><h3>One forced tool-call</h3><p>Single request per summary — no multi-turn back-and-forth, no agentic retry loop burning extra tokens.</p></div>
+      <div class="card"><h3>Bounded output</h3><p><code>max_tokens=1024</code> caps every response — cost per summary is predictable, never runaway.</p></div>
+      <div class="card"><h3>Compact schema</h3><p>Short string arrays for strengths/concerns, not open-ended prose — the model is guided to stay terse.</p></div>
+      <div class="card"><h3>Stateless calls</h3><p>Each summarization is a fresh single-shot request — no growing conversation history re-sent every time.</p></div>
+      <div class="card"><h3>Right-sized model</h3><p>Uses Claude Sonnet for a well-scoped extraction task, not an oversized model for simple structured output.</p></div>
+      <div class="card"><h3>Result</h3><p>Cost scales <b style="color:var(--fg)">linearly</b> with number of summaries — no hidden multiplier from chained calls or context bloat.</p></div>
+    </div>
+  </section>
+
+  <!-- 9: Business case / ROI -->
+  <section class="slide" data-notes="If re-reading and writing up a summary of one candidate's notes takes ten to fifteen minutes, and a hiring manager does this for every candidate in a pipeline, that adds up fast across a hiring season.">
+    <div class="eyebrow">Business Case</div>
+    <h2 class="section-title">What this is worth, in plain terms.</h2>
+    <ul class="bullets">
+      <li><b>Time saved:</b> ~10–15 minutes per candidate, per interview, on the re-reading/write-up step alone.</li>
+      <li><b>Consistency:</b> the same notes get judged the same way regardless of who's reviewing that day.</li>
+      <li><b>Low infra cost:</b> single SQLite file, containerized app — no database server, no enterprise integration to buy or maintain.</li>
+      <li><b>Fast to adopt:</b> zero setup, unlike interview-intelligence competitors that require recorded/transcribed calls.</li>
+      <li><b>Scalable pattern:</b> the same storage + agent design extends directly to shortlist ranking and cross-candidate Q&amp;A — not a rebuild, an extension.</li>
+    </ul>
+  </section>
+
+  <!-- 10: Live demo -->
+  <section class="slide" data-notes="Switch to the browser now and run the live sequence: pick/add candidate, paste notes, Summarize, read the result out loud, Save, reload to prove persistence. Budget ~2:30.">
+    <div class="eyebrow">Live Demo</div>
+    <h2 class="section-title">See it work.</h2>
+    <div class="demo-card">
+      <div>Switch to the browser now →</div>
+      <div class="url" id="demoUrl">firm-pee-records-distribute.trycloudflare.com</div>
+      <p style="margin-top:0.8em;font-size:0.8rem">(update this line if the tunnel was restarted since — quick tunnels get a new random URL each run)</p>
+    </div>
+  </section>
+
+  <!-- 11: What's next -->
+  <section class="slide">
+    <div class="eyebrow">What's Next</div>
+    <h2 class="section-title">Today: one candidate. Next: <span class="highlight">the whole pipeline.</span></h2>
+    <ul class="bullets">
+      <li><b>Shortlist ranking:</b> compare a full candidate pool with reasoning, not just a numeric score.</li>
+      <li><b>Cross-candidate Q&amp;A:</b> "who scored well on system design?" — answered by searching stored history.</li>
+      <li><b>Live API key:</b> blocked today by company policy on provisioning a new key — a one-line config change once available, no rebuild.</li>
+    </ul>
+  </section>
+
+  <!-- 12: How AI built this -->
+  <section class="slide" data-notes="I'm a QE tester, not a developer, and this was built in one day using Claude Code. Instead of one continuous conversation, the work was split across specialized sub-agents. The QE pass actually caught and fixed a real bug before I ever saw the app myself. And when deployment hit a wall, Claude Code helped diagnose each failure directly from the actual error output and pivot to a local Kubernetes setup with a public tunnel, rather than getting stuck.">
     <div class="eyebrow">How AI Was Used to Build This</div>
-    <h1>Built solo, today, using <span class="highlight">Claude Code sub-agents</span> for design, build, and adversarial testing.</h1>
+    <h2 class="section-title">Built solo, in one day, with <span class="highlight">Claude Code sub-agents.</span></h2>
+    <ul class="bullets">
+      <li><b>Solo, non-developer build:</b> QE background, no dev background — orchestrated rather than hand-coded line by line.</li>
+      <li><b>Specialized sub-agents:</b> one for architecture/stack decisions, one for implementation across two build sprints, one dedicated adversarial QE pass.</li>
+      <li><b>The QE pass mattered:</b> caught and fixed a real bug — a confusing double error message on the missing-API-key path — before the app was ever manually reviewed.</li>
+      <li><b>Deployment troubleshooting, live:</b> diagnosed a Python 3.14/pillow build failure, a company API-policy block, and a GitHub OAuth timeout directly from real error output, and pivoted to a working local Kubernetes + public tunnel setup — that troubleshooting is part of the deliverable, not a hidden failure.</li>
+    </ul>
   </section>
 
 </div>
@@ -192,7 +358,7 @@
 
 <div class="chrome">
   <button id="prev">&larr;</button>
-  <span id="counter">1 / 6</span>
+  <span id="counter">1 / 12</span>
   <button id="next">&rarr;</button>
   <span class="hint">press N for notes</span>
 </div>
@@ -208,7 +374,8 @@
   function render() {
     slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
     counter.textContent = (i + 1) + ' / ' + slides.length;
-    notesText.textContent = slides[i].dataset.notes || '';
+    const n = slides[i].dataset.notes || '(no additional speaker notes for this slide)';
+    notesText.textContent = n;
   }
   function go(delta) {
     i = Math.max(0, Math.min(slides.length - 1, i + delta));
