@@ -1,0 +1,5 @@
+app/.venv/
+app/candidates.db
+app/.streamlit/secrets.toml
+__pycache__/
+*.pyc
