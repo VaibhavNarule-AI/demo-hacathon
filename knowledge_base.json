@@ -1,0 +1,240 @@
+{
+  "meta": {
+    "project_name": "Interview Note Summarizer",
+    "category": "HR Tech / AI Agent",
+    "build_type": "One-day hackathon MVP, solo non-developer builder (QE background)",
+    "build_tool": "Claude Code (multi-agent orchestration: solution-architect, rapid-builder, qe-guardian)",
+    "date": "2026-07-16"
+  },
+
+  "business_problem": {
+    "statement": "After every candidate interview, HR is left with unstructured, hand-typed notes and no consistent way to turn them into a hiring decision. Manually re-reading notes to extract a judgment is slow and produces inconsistent conclusions across reviewers.",
+    "persona": "HR recruiter / hiring manager managing a candidate pipeline end-to-end",
+    "market_gap": "ATS tools (Greenhouse/Lever) offer only a free-text scorecard field with no summarization. Interview-intelligence tools (BrightHire/Metaview/HireVue) do AI summarization but require recorded/transcribed calls, integration setup, and enterprise pricing. No competitor takes notes HR already typed by hand and returns a structured judgment with zero setup.",
+    "value_proposition": "Turn unstructured interview notes into a consistent, structured hiring judgment (strengths/concerns/rating/recommendation) in seconds, with zero integration or setup cost."
+  },
+
+  "user_roles": [
+    {
+      "role": "HR / Hiring Manager",
+      "description": "Single user role for this MVP. Adds candidates, pastes notes, triggers summarization, reviews and saves results, reopens candidate records later.",
+      "permissions": "Full access to all app functions; no role differentiation implemented (single-user, no auth by explicit hackathon scope decision)."
+    }
+  ],
+
+  "functional_requirements": [
+    "Add a new candidate by name",
+    "Select an existing candidate from a list and load their prior notes/summary",
+    "Paste free-text interview notes into a text area",
+    "Trigger AI summarization of the notes on demand (button click)",
+    "Receive a structured result: strengths (list), concerns (list), overall_rating (1-5), recommendation (short string)",
+    "Persist the notes + summary against the candidate's record",
+    "Reload a candidate's notes + summary automatically when reselected",
+    "Run in a usable fallback mode (mocked summary) when no live AI API key is configured, clearly labeled as such"
+  ],
+
+  "non_functional_requirements": [
+    "Single command startup, no manual setup steps beyond documented API key + dependency install",
+    "No authentication, no multi-user support, no persistence layer beyond a single local file (explicit scope cut for a one-day disposable build)",
+    "Never show a raw stack trace or unhandled exception to an end user/judge",
+    "Bounded, predictable AI-call cost (see token_cost_efficiency)",
+    "Must run from a fully offline/no-external-account fallback path (mocked mode) in case live API access is unavailable",
+    "Deployable to a publicly reachable URL without requiring a paid account or approval-gated signup",
+    "Portable across at least 3 different hosting targets without app code changes (proves architecture is not tied to one platform)"
+  ],
+
+  "features": {
+    "implemented": [
+      "Candidate picker (dropdown: existing candidates + add-new)",
+      "Free-text notes input",
+      "AI-powered structured summarization (Claude API, forced tool-use)",
+      "Persistent SQLite storage keyed by candidate name",
+      "Save button to commit a summary to storage",
+      "Automatic reload of a candidate's notes/summary on reselect",
+      "Mocked demo-mode fallback when no API key is present, clearly labeled with a warning banner",
+      "Clean error handling for: missing API key, blank input, malformed/partial AI response",
+      "Multi-target deployment: containerized (Docker), orchestrated (Kubernetes/minikube), publicly tunneled (Cloudflare Tunnel), plus documented fallback paths (Streamlit Community Cloud, Render.com, remote K8s + Docker Hub/ACR)"
+    ],
+    "planned_not_built": [
+      "Shortlist ranking across multiple candidates with comparative reasoning",
+      "Natural-language Q&A search across all candidates' stored history",
+      "Auto-drafted follow-up communication (rejection/offer/next-round email)",
+      "Live API integration (blocked in this build by company policy, not a technical gap)"
+    ]
+  },
+
+  "workflows": [
+    {
+      "name": "Core summarization workflow",
+      "steps": [
+        "HR opens the app",
+        "Picks an existing candidate OR adds a new one by name",
+        "Pastes free-text interview notes into the text area",
+        "Clicks 'Summarize'",
+        "App checks for a configured API key",
+        "If key present: calls Claude API with a forced tool-call and a fixed JSON schema",
+        "If key absent: falls back to a labeled mocked example result",
+        "Result (strengths/concerns/rating/recommendation) is rendered readably on screen",
+        "HR clicks 'Save'",
+        "Result + original notes are upserted into SQLite keyed by candidate name",
+        "On any future visit, selecting that candidate reloads the saved notes and summary automatically"
+      ]
+    }
+  ],
+
+  "business_rules": [
+    "A candidate record is uniquely identified by name (UNIQUE constraint) — no duplicate-name candidates.",
+    "Notes are draft-only until 'Save' is clicked — switching candidates before saving discards unsaved notes (accepted UX tradeoff, not a bug).",
+    "The Save button only renders once a summary result exists in the current session — saving before summarizing is structurally impossible through the UI.",
+    "A missing/invalid API key must never surface as a raw error — always resolve to either a mocked result (demo mode) or a single clean, human-readable message.",
+    "Any AI response missing a required field (strengths/concerns/overall_rating/recommendation) is treated as invalid and surfaces a clean error rather than being partially trusted."
+  ],
+
+  "ui_screens": [
+    {
+      "screen": "Main / single-page app",
+      "elements": [
+        "Page title: 'Interview Note Summarizer'",
+        "Sidebar: candidate picker (selectbox: existing names + '+ Add new candidate'), conditional new-candidate name text input",
+        "Main panel: 'Candidate: <name>' subheader",
+        "Notes textarea (pre-filled if a saved candidate is selected)",
+        "'Summarize' primary button",
+        "Result panel (conditional): Strengths list, Concerns list, Overall Rating, Recommendation, optional '⚠️ DEMO MODE' warning banner if running on a mocked result",
+        "'Save' button (conditional: only rendered once a result exists)"
+      ]
+    }
+  ],
+
+  "database_schema": {
+    "engine": "SQLite (single file, `candidates.db`, colocated with the app)",
+    "tables": [
+      {
+        "name": "candidates",
+        "columns": [
+          {"name": "id", "type": "INTEGER", "constraints": "PRIMARY KEY AUTOINCREMENT"},
+          {"name": "name", "type": "TEXT", "constraints": "UNIQUE NOT NULL"},
+          {"name": "notes", "type": "TEXT"},
+          {"name": "strengths", "type": "TEXT", "note": "JSON-encoded array of strings"},
+          {"name": "concerns", "type": "TEXT", "note": "JSON-encoded array of strings"},
+          {"name": "overall_rating", "type": "INTEGER"},
+          {"name": "recommendation", "type": "TEXT"},
+          {"name": "updated_at", "type": "TEXT", "note": "ISO 8601 UTC timestamp"}
+        ],
+        "upsert_strategy": "INSERT ... ON CONFLICT(name) DO UPDATE SET ... (idempotent save-by-name)"
+      }
+    ]
+  },
+
+  "apis_integrations": [
+    {
+      "name": "Anthropic Claude API",
+      "sdk": "anthropic Python SDK",
+      "model": "claude-sonnet-5",
+      "call_pattern": "Single messages.create() call with tool_choice forcing exactly one tool call (record_interview_summary), input_schema defines strengths/concerns/overall_rating/recommendation, required + additionalProperties:false enforced",
+      "auth": "API key via ANTHROPIC_API_KEY env var, falling back to Streamlit secrets.toml if present (checked for file existence before touching st.secrets to avoid a Streamlit-internal error leak)",
+      "cost_controls": ["max_tokens=1024 cap", "single-shot stateless call, no chat history sent", "compact structured schema (string arrays, not prose)"]
+    }
+  ],
+
+  "validations": [
+    "Blank/whitespace-only notes blocked before an API call is attempted (st.warning, no call made)",
+    "Blank candidate name handled gracefully (subheader shows a placeholder, save requires a name)",
+    "AI response validated for required fields before being trusted/rendered; missing fields raise a caught, user-readable error",
+    "API key presence checked via a dedicated get_api_key() function before every summarization attempt"
+  ],
+
+  "authentication": {
+    "implemented": false,
+    "reasoning": "Explicit hackathon scope cut — single-user internal tool, no auth/multi-user support added per the project's own standing rule to avoid production-concern scope creep in a one-day disposable build.",
+    "note_for_future": "If productionized, would need per-recruiter accounts and row-level access control on the candidates table."
+  },
+
+  "reusable_components": [
+    {
+      "pattern": "Forced-tool-call structured output",
+      "description": "Using tool_choice to force exactly one named tool call with a strict input_schema is a reusable pattern for any 'extract structured judgment from unstructured text' feature, not just this HR use case."
+    },
+    {
+      "pattern": "Env-var-first, secrets-file-fallback API key resolution with existence-check guard",
+      "description": "get_api_key() pattern: check env var first, then check a secrets file actually exists on disk before touching the secrets API, to avoid framework-internal error leakage. Reusable in any Streamlit app reading a secret."
+    },
+    {
+      "pattern": "Mocked-mode graceful degradation",
+      "description": "When an external dependency (API key) is unavailable, fall back to a clearly-labeled mocked response rather than only showing an error — keeps a demo/dev flow usable. The real-vs-mock branch is a single boolean check, and switching to live is a zero-code-change config addition."
+    },
+    {
+      "pattern": "SQLite upsert-by-unique-key",
+      "description": "INSERT ... ON CONFLICT DO UPDATE keyed on a natural unique field (name) — simple persistence pattern for single-file-storage MVPs without needing a migration framework."
+    },
+    {
+      "pattern": "Draft-until-saved session state",
+      "description": "Streamlit session_state used to track 'loaded_for' candidate key so switching selection resets/reloads state predictably, with an explicit accepted tradeoff (unsaved drafts are discarded) documented rather than silently left ambiguous."
+    },
+    {
+      "pattern": "Platform-agnostic containerized app",
+      "description": "The same Dockerfile + app code deployed successfully (or was prepared for) 4 different targets: Streamlit Community Cloud, Render.com (via render.yaml blueprint), remote Kubernetes + Docker Hub/ACR, and local Kubernetes (minikube) + Cloudflare Tunnel — proving the app itself carries zero platform lock-in."
+    },
+    {
+      "pattern": "No-signup public tunnel for constrained environments",
+      "description": "Cloudflare Tunnel's anonymous quick-tunnel mode (`cloudflared tunnel --url`) gives a public HTTPS URL with zero account/signup — a reusable fallback whenever normal cloud hosting is blocked by org policy or account friction."
+    }
+  ],
+
+  "best_practices_applied": [
+    "Adversarial QE pass before considering the build done — deliberately tried blank/malformed input, repeated runs, and the missing-key path; caught and fixed a real bug (duplicate/confusing error message) before the user ever saw it",
+    "Never show raw stack traces to an end user — every failure path resolves to a clean, human-readable message",
+    "Explicit, written known-issues log with severity and demo-time workaround per issue, rather than silently hoping nothing breaks live",
+    "Version pins relaxed (>= instead of ==) after a real breakage (pillow wheel unavailable for a newer Python) rather than fighting the platform's runtime",
+    "Secrets never committed to source control or embedded in code; read from env var/secret store only",
+    "When a credential was accidentally pasted into chat, it was treated as compromised immediately and the user was told to rotate it, regardless of whether it was actually misused",
+    "Deployment target decisions documented with the real reasoning (why X was chosen, why Y was abandoned) in DEPLOY.md, not just the final answer"
+  ],
+
+  "lessons_learned": {
+    "what_worked_well": [
+      "Splitting work across specialized sub-agents (architecture, build sprints, QE) kept each pass focused and let the QE pass catch a real bug the build agent didn't",
+      "Building a mocked-mode fallback turned a hard external blocker (no obtainable API key) into a fully demoable app instead of a dead end",
+      "Diagnosing deployment failures from actual error/log output (Python 3.14 pillow wheel failure, DNS resolution difference between resolvers) rather than guessing led to fast, correct fixes",
+      "Keeping the same app code stable across every deployment pivot (Streamlit Cloud → Render → remote K8s → local K8s) proved the architecture wasn't the problem, the hosting environment was",
+      "Verifying claims instead of trusting them (re-testing the public tunnel via a DNS bypass before telling the user it worked) caught that the office network's DNS, not the deployment, was the actual issue"
+    ],
+    "what_was_missing_initially": [
+      "No upfront intake of the user's actual environment constraints (company API-key policy, network/OAuth restrictions, existing cloud/cluster access) before choosing a deployment target — this caused 3 reactive pivots that could likely have been reduced with an earlier constraints check",
+      "No initial check on whether the target Python/runtime version of the chosen hosting platform matched the pinned dependency versions",
+      "No established secure channel for credential handoff at the start of the conversation — the user pasted a secret into chat twice despite being told each time not to"
+    ],
+    "errors_encountered_and_root_causes": [
+      {"error": "GitHub push failed with 'could not read Username' / 'Device not configured'", "root_cause": "Non-interactive shell has no way to prompt for git credentials; git also no longer accepts account passwords over HTTPS, only tokens.", "fix": "User ran git push in their own interactive terminal with a classic PAT (repo scope)."},
+      {"error": "GitHub API repo-creation call returned 403 'Resource not accessible by personal access token'", "root_cause": "Fine-grained PAT lacked account-level repo-creation permission.", "fix": "Abandoned automated repo creation; user created the repo manually via the GitHub web UI."},
+      {"error": "Streamlit Cloud build failed with 'Error installing requirements' → pillow build failure", "root_cause": "Exact version pin (streamlit==1.39.0) pulled an old pillow (10.4.0) with no prebuilt wheel for the platform's Python 3.14 runtime.", "fix": "Relaxed pins to >= instead of == so pip/uv could resolve a compatible pillow version."},
+      {"error": "GitHub OAuth sign-in for Streamlit Cloud returned a 504 Gateway Timeout", "root_cause": "Corporate network/proxy interfering with the OAuth callback handshake.", "fix": "Retried from outside the office network."},
+      {"error": "Anthropic Console org creation blocked with 'Parent Organization is blocking new organization creation for domain'", "root_cause": "Company-wide admin policy on the user's work email domain.", "fix": "No resolution obtained (IT declined); routed around via a mocked demo-mode fallback in the app instead of a real key."},
+      {"error": "ACR/Docker registry push attempted with a company credential pasted directly in chat", "root_cause": "User pasted a live secret into the conversation despite being told the correct (file-based) hand-off method beforehand.", "fix": "Credential was flagged as compromised immediately, not reused beyond the immediate step, and rotation was recommended; approach was abandoned in favor of a different registry/target anyway."},
+      {"error": "kubectl/docker not found when invoked via the automated tool session", "root_cause": "The automation shell's PATH did not include Homebrew's install location (/opt/homebrew/bin) even though tools were correctly installed via the user's interactive terminal.", "fix": "Invoked binaries by full path / explicitly prepended /opt/homebrew/bin to PATH per command."},
+      {"error": "sudo-gated install steps (Homebrew, admin prompts) could not run from the automated tool session", "root_cause": "No interactive TTY available for password entry in that session.", "fix": "User ran those specific steps themselves in their own interactive terminal."},
+      {"error": "Public tunnel URL unreachable for the user specifically", "root_cause": "Office network's DNS resolver failed to resolve the tunnel's hostname (trycloudflare.com), while public resolvers (8.8.8.8/1.1.1.1) resolved it fine — a network-level filtering pattern consistent with earlier blocks.", "fix": "Verified the app/tunnel worked correctly by bypassing DNS in test requests; user worked around it locally via a hosts-file entry or a different network."}
+    ],
+    "prompt_improvement_opportunities": [
+      "Initial problem description was informal/ambiguous and required a full clarifying round-trip — a structured intake prompt (business goal, core AI feature, input format, users) up front reduces this to one pass.",
+      "Single-word confirmations ('yes', 'proceed') following a multi-option question are ambiguous and caused repeated re-asks — prompts/responses should reference which specific option is being confirmed.",
+      "The deployment target was chosen and pivoted reactively 4 times — a single upfront question about company network/API/account constraints would have surfaced the eventual blockers (no external API key policy, OAuth/DNS network filtering, no confirmed remote cluster access) before any hosting attempt began.",
+      "The first presentation deck was built following a generic 'keep slides sparse' best practice by default, which did not match this user's actual need (a content-dense technical+business deck) — prompts building a presentation/deliverable should explicitly ask what level of content density and audience (spoken pitch vs. leave-behind technical doc) is wanted before applying a default style.",
+      "Credentials were twice typed directly into the conversation despite instructions to use a file-based hand-off — the instruction should be given as a hard requirement with a concrete file path *before* any credential is ever needed, not just as an in-the-moment warning."
+    ]
+  },
+
+  "optimized_prompt": {
+    "purpose": "A single upfront prompt that reduces the iteration seen in this session to (ideally) one build pass, for use as a template by an AI application development framework building similar 'unstructured input → structured AI judgment → persisted record' internal tools.",
+    "prompt_text": "Build a one-day MVP hackathon app: [DOMAIN, e.g. 'an HR tool that summarizes interview notes']. Core AI feature: [describe the single AI-powered transformation, e.g. 'HR pastes free-text interview notes for a candidate; an AI agent extracts a structured summary (strengths, concerns, overall rating, recommendation) and persists it against that candidate's record']. Input format: [e.g. 'free-text, typed directly into the app, no file upload']. Primary user: [e.g. 'single internal user, no auth/multi-user needed']. \n\nBefore building, confirm these constraints so the deployment target is chosen correctly the first time: (1) Is there an existing, usable API key/credential for the AI provider, or is there an organizational policy that blocks provisioning a new one? (2) Is the company network known to block or filter any of: OAuth sign-in flows, specific external domains/DNS, or public tunnel services? (3) Is there an existing remote server/cluster/registry already accessible (with confirmed working credentials in hand), or should the target be a local-machine deployment with a public tunnel? (4) Should the final presentation/deck be a sparse spoken-pitch style or a dense technical+business leave-behind document?\n\nBuild order: (a) working core happy-path end-to-end with one hardcoded record before any persistence or secondary UI, (b) add persistence + full CRUD-lite UI, (c) add a labeled mocked-response fallback mode that activates automatically whenever the real API key/credential is unavailable, so the app is always demoable regardless of question (1)'s answer, (d) run an adversarial QE pass (blank/malformed input, repeated runs, missing-credential path) and fix anything that would show a raw error to an end user, (e) deploy to the target chosen in question (3), verifying end-to-end reachability (not just 'it deployed') before considering it done, (f) produce a demo script (exact click sequence + timing) and a presentation matching the density chosen in question (4).\n\nHard rules: never accept a pasted credential/secret in conversation — always request it be saved to a file path outside the source repo, on the very first ask, before it's ever needed. Never leave a build undemoable due to a missing external credential — always have a mocked fallback. Confirm which option is being actioned when a user gives a one-word response to a multi-option question, rather than assuming.",
+    "structured_variables": {
+      "domain": "string — the business domain (e.g. HR, sales, support)",
+      "core_ai_transformation": "string — the single unstructured-input-to-structured-output feature being built",
+      "input_format": "enum — free_text | file_upload | structured_form",
+      "primary_user": "string — role and auth/multi-user requirement",
+      "api_key_availability": "enum — available | blocked_by_policy | unknown_needs_check",
+      "network_constraints": "array — known blocked domains/flows (OAuth, DNS, tunnels), or 'none_known'",
+      "deployment_target_hint": "enum — existing_remote_cluster | local_machine_with_tunnel | managed_paas | unknown_needs_check",
+      "presentation_density": "enum — sparse_spoken_pitch | dense_technical_leavebehind"
+    }
+  }
+}
