@@ -1,26 +1,24 @@
 # Deployment — Docker + Kubernetes (Gruve Inc cluster)
 
-This is the primary deployment path — Docker image pushed to the company's Azure
-Container Registry (`swegdev.azurecr.io`), run on the company's existing Kubernetes
-cluster. Chosen over Streamlit Cloud/Render because it uses infra you already have
-access to, instead of external accounts blocked by company/network policy.
+This is the primary deployment path — Docker image pushed to Docker Hub
+(`vaibhavnarule23/demo_hackathon`), run on the company's existing Kubernetes cluster.
+Chosen over Streamlit Cloud/Render because it uses infra you already have access to,
+instead of external accounts blocked by company/network policy.
 
 All of these steps need to run on your own machine — this build environment has no
-`docker` or `kubectl` installed and no network path to your company's registry or
+`docker` or `kubectl` installed and no network path to Docker Hub or your company's
 cluster, so I can't run them for me. `app/Dockerfile`, `k8s/deployment.yaml`, and
 `k8s/service.yaml` are already committed; you just need to build, push, and apply.
 
 **1. Build and push the image** (from the `app/` directory):
 ```
 cd app
-docker build -t swegdev.azurecr.io/demo-hacathon:latest .
-docker login swegdev.azurecr.io -u swegdev
-docker push swegdev.azurecr.io/demo-hacathon:latest
+docker build -t vaibhavnarule23/demo_hackathon:latest .
+docker login -u vaibhavnarule23
+docker push vaibhavnarule23/demo_hackathon:latest
 ```
-When `docker login` asks for a password, use a **freshly rotated** ACR password (the
-one shared earlier in chat should be rotated regardless, in Azure Portal → your
-registry → Access keys → Regenerate). Don't paste it in chat — just type/paste it
-directly into the terminal prompt.
+When `docker login` asks for a password, type/paste your Docker Hub password or
+access token directly into the terminal prompt — don't paste it here in chat.
 
 **2. Create the API key secret** (only if you have a working `ANTHROPIC_API_KEY` —
 skip this if not, the app runs fine in mocked demo mode without it):
