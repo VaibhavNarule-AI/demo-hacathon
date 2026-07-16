@@ -131,10 +131,13 @@ if "loaded_for" not in st.session_state:
     st.session_state.loaded_for = None
 if "summary_result" not in st.session_state:
     st.session_state.summary_result = None
+if "is_mock_result" not in st.session_state:
+    st.session_state.is_mock_result = False
 
 if st.session_state.loaded_for != candidate_key:
     st.session_state.loaded_for = candidate_key
     st.session_state.summary_result = None
+    st.session_state.is_mock_result = False
     if choice == NEW_CANDIDATE_OPTION:
         st.session_state["notes_input"] = ""
     else:
@@ -245,14 +248,25 @@ def call_claude_for_summary(notes_text: str) -> dict:
     raise RuntimeError("Claude did not return the expected structured tool call.")
 
 
+MOCK_RESULT = {
+    "strengths": [
+        "Clear communicator, walked through technical tradeoffs step by step",
+        "Solid hands-on experience directly relevant to the role",
+    ],
+    "concerns": [
+        "Limited detail on handling ambiguity or conflicting priorities",
+        "Some hesitation when asked about leading or mentoring others",
+    ],
+    "overall_rating": 4,
+    "recommendation": "Hire with reservations",
+}
+
 if summarize_clicked:
     if not notes.strip():
         st.warning("Paste some interview notes first.")
     elif not get_api_key():
-        st.error(
-            "No ANTHROPIC_API_KEY found. Set it as an environment variable or in "
-            "Streamlit secrets before summarizing."
-        )
+        st.session_state.summary_result = MOCK_RESULT
+        st.session_state.is_mock_result = True
     else:
         try:
             with st.spinner("Summarizing with Claude..."):
@@ -266,6 +280,7 @@ if summarize_clicked:
                 raise ValueError(f"Claude's response was missing fields: {', '.join(missing)}")
 
             st.session_state.summary_result = result
+            st.session_state.is_mock_result = False
         except Exception as e:
             st.error(
                 "Couldn't get a usable summary back from Claude (bad/partial response "
@@ -277,6 +292,11 @@ if summarize_clicked:
 # --------------------------------------------------------------------------
 result = st.session_state.summary_result
 if result:
+    if st.session_state.is_mock_result:
+        st.warning(
+            "⚠️ DEMO MODE — no live ANTHROPIC_API_KEY configured. This is a mocked "
+            "example result, not a real Claude call."
+        )
     st.success("Summary")
 
     st.markdown("### Strengths")
