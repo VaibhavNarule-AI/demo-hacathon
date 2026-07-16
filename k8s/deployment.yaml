@@ -16,7 +16,8 @@ spec:
     spec:
       containers:
         - name: demo-hacathon
-          image: vaibhavnarule23/demo_hackathon:latest
+          image: demo-hacathon:local
+          imagePullPolicy: Never
           ports:
             - containerPort: 8501
           env:
