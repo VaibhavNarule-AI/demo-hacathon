@@ -22,3 +22,22 @@ Streamlit accounts.
 
 Fallback if Streamlit Cloud has any account/setup friction: Hugging Face Spaces with
 the Streamlit SDK, same `app/` contents.
+
+## Alternative: Render.com
+
+Used instead of Streamlit Cloud due to office-network OAuth issues. A `render.yaml`
+blueprint is already committed at the repo root, so Render can configure the service
+automatically.
+
+1. Go to [dashboard.render.com](https://dashboard.render.com) → sign in with GitHub.
+2. Click **New** → **Blueprint** → select the `demo-hacathon` repo → Render reads
+   `render.yaml` and pre-fills the service (root dir `app`, build/start commands).
+3. When prompted for the `ANTHROPIC_API_KEY` env var (marked `sync: false` in the
+   blueprint so it's never stored in the repo), paste your real key.
+4. Click **Apply** / **Create**. First deploy takes a few minutes on the free tier.
+5. Render gives a public `https://demo-hacathon.onrender.com`-style URL — test the
+   summarize flow twice with real notes before presenting.
+
+Note: Render's free tier spins the service down after inactivity, so the first
+request after a while will be slow (~30s cold start) — worth knowing before a live
+demo, hit the URL once a minute or two beforehand to warm it up.
