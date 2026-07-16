@@ -1,7 +1,62 @@
-# Deployment — Streamlit Community Cloud
+# Deployment — Docker + Kubernetes (Gruve Inc cluster)
 
-Local repo is already committed on `main`. Remaining steps need your own GitHub and
-Streamlit accounts.
+This is the primary deployment path — Docker image pushed to the company's Azure
+Container Registry (`swegdev.azurecr.io`), run on the company's existing Kubernetes
+cluster. Chosen over Streamlit Cloud/Render because it uses infra you already have
+access to, instead of external accounts blocked by company/network policy.
+
+All of these steps need to run on your own machine — this build environment has no
+`docker` or `kubectl` installed and no network path to your company's registry or
+cluster, so I can't run them for me. `app/Dockerfile`, `k8s/deployment.yaml`, and
+`k8s/service.yaml` are already committed; you just need to build, push, and apply.
+
+**1. Build and push the image** (from the `app/` directory):
+```
+cd app
+docker build -t swegdev.azurecr.io/demo-hacathon:latest .
+docker login swegdev.azurecr.io -u swegdev
+docker push swegdev.azurecr.io/demo-hacathon:latest
+```
+When `docker login` asks for a password, use a **freshly rotated** ACR password (the
+one shared earlier in chat should be rotated regardless, in Azure Portal → your
+registry → Access keys → Regenerate). Don't paste it in chat — just type/paste it
+directly into the terminal prompt.
+
+**2. Create the API key secret** (only if you have a working `ANTHROPIC_API_KEY` —
+skip this if not, the app runs fine in mocked demo mode without it):
+```
+kubectl create secret generic demo-hacathon-secrets \
+  --from-literal=ANTHROPIC_API_KEY=your-real-key-here
+```
+
+**3. Apply the manifests:**
+```
+kubectl apply -f ../k8s/deployment.yaml
+kubectl apply -f ../k8s/service.yaml
+```
+
+**4. Get the public URL/IP:**
+```
+kubectl get service demo-hacathon
+```
+Wait for `EXTERNAL-IP` to populate (can take a minute or two on first creation), then
+open `http://<EXTERNAL-IP>` in a browser.
+
+If your cluster doesn't support `LoadBalancer` (some internal/on-prem clusters don't
+auto-provision a public IP), change `type: LoadBalancer` to `type: ClusterIP` in
+`k8s/service.yaml` and use `kubectl port-forward service/demo-hacathon 8501:80`
+instead, or ask your cluster admin about an Ingress if you have one set up.
+
+**Note:** the SQLite storage inside the container resets whenever the pod restarts
+(same known limitation as the cloud-hosted options below) — pre-seed a candidate or
+two before presenting, same as documented in `03_BUILD_TRACKER_TEMPLATE.md`.
+
+---
+
+# Fallback — Streamlit Community Cloud
+
+Kept as a working fallback since this was already deployed and verified live before
+switching to Kubernetes. Local repo is already committed on `main`.
 
 1. Create a new GitHub repo (e.g. `hr-interview-summarizer`) at github.com/new —
    don't initialize it with a README.
