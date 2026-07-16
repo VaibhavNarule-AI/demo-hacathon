@@ -1,96 +1,107 @@
-# Deployment — Docker + Kubernetes (Gruve Inc cluster)
+# Deployment — Local Kubernetes (minikube) + Cloudflare Tunnel
 
-This is the primary deployment path — Docker image pushed to Docker Hub
-(`vaibhavnarule23/demo_hackathon`), run on the company's existing Kubernetes cluster.
-Chosen over Streamlit Cloud/Render because it uses infra you already have access to,
-instead of external accounts blocked by company/network policy.
+This is the **working, currently-live** deployment path. Company/network policy
+blocked every hosted option (Anthropic API org creation, GitHub OAuth for Streamlit
+Cloud, and there was no confirmed `kubectl` access to a remote company cluster), so
+the final setup runs entirely on your own Mac:
 
-All of these steps need to run on your own machine — this build environment has no
-`docker` or `kubectl` installed and no network path to Docker Hub or your company's
-cluster, so I can't run them for me. `app/Dockerfile`, `k8s/deployment.yaml`, and
-`k8s/service.yaml` are already committed; you just need to build, push, and apply.
+- **minikube** (local Kubernetes cluster, Docker driver) runs the app from
+  `app/Dockerfile`, deployed via `k8s/deployment.yaml` + `k8s/service.yaml`.
+- **cloudflared quick tunnel** exposes it publicly with zero signup/account needed,
+  sidestepping the pattern of account/OAuth blocks hit with every other option.
 
-**1. Build and push the image** (from the `app/` directory):
+## One-time setup (already done, for reference)
 ```
+brew install --cask docker          # then open Docker.app once, let it fully start
+brew install kubectl minikube cloudflared
+```
+
+## Every time you need it running (e.g. before presenting)
+```
+minikube start --driver=docker
+
 cd app
-docker build -t vaibhavnarule23/demo_hackathon:latest .
-docker login -u vaibhavnarule23
-docker push vaibhavnarule23/demo_hackathon:latest
-```
-When `docker login` asks for a password, type/paste your Docker Hub password or
-access token directly into the terminal prompt — don't paste it here in chat.
+eval $(minikube docker-env)
+docker build -t demo-hacathon:local .
+cd ..
 
-**2. Create the API key secret** (only if you have a working `ANTHROPIC_API_KEY` —
-skip this if not, the app runs fine in mocked demo mode without it):
-```
-kubectl create secret generic demo-hacathon-secrets \
-  --from-literal=ANTHROPIC_API_KEY=your-real-key-here
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl rollout status deployment/demo-hacathon
 ```
 
-**3. Apply the manifests:**
+Get a local URL (keep this terminal window open — it's a live tunnel process):
 ```
-kubectl apply -f ../k8s/deployment.yaml
-kubectl apply -f ../k8s/service.yaml
+minikube service demo-hacathon --url
 ```
 
-**4. Get the public URL/IP:**
+Expose that local URL publicly (keep this terminal open too, in a second window):
 ```
-kubectl get service demo-hacathon
+cloudflared tunnel --url http://127.0.0.1:<port-from-previous-command>
 ```
-Wait for `EXTERNAL-IP` to populate (can take a minute or two on first creation), then
-open `http://<EXTERNAL-IP>` in a browser.
+It prints a `https://<random-words>.trycloudflare.com` URL — that's the one to share.
 
-If your cluster doesn't support `LoadBalancer` (some internal/on-prem clusters don't
-auto-provision a public IP), change `type: LoadBalancer` to `type: ClusterIP` in
-`k8s/service.yaml` and use `kubectl port-forward service/demo-hacathon 8501:80`
-instead, or ask your cluster admin about an Ingress if you have one set up.
-
-**Note:** the SQLite storage inside the container resets whenever the pod restarts
-(same known limitation as the cloud-hosted options below) — pre-seed a candidate or
-two before presenting, same as documented in `03_BUILD_TRACKER_TEMPLATE.md`.
+## Known caveats
+- **Both terminal windows (the `minikube service` tunnel and `cloudflared` tunnel)
+  must stay running, and your Mac must stay awake and connected**, for the whole
+  window you might be asked to demo it — this is not a persistently-hosted cloud
+  deployment.
+- **Office network DNS blocks `trycloudflare.com`** (same pattern as other
+  account/OAuth blocks hit during setup) — you personally may not be able to open the
+  public URL from office wifi. Judges on their own network/device are unaffected.
+  Workaround to test it yourself from office wifi:
+  ```
+  echo "<ip-from-dig> <your-tunnel-hostname>" | sudo tee -a /etc/hosts
+  ```
+  (get `<ip-from-dig>` via `dig +short <your-tunnel-hostname> @1.1.1.1`), or just use
+  mobile data/hotspot instead.
+- **No real `ANTHROPIC_API_KEY` is configured** — company policy blocks provisioning
+  one (Anthropic Console org creation is blocked for the `gruve.ai` domain, and IT
+  won't provision a key). The app runs in a labeled **mocked demo mode**: clicking
+  "Summarize" shows a realistic but fake example result with a visible "⚠️ DEMO MODE"
+  banner. Fully demoable, just narrate that honestly if asked. Swap in a real key any
+  time (as a Kubernetes secret, see `k8s/deployment.yaml`'s `secretKeyRef`) and it
+  switches to live Claude calls automatically, no code changes needed.
+- **SQLite storage resets** whenever the pod restarts — pre-seed a candidate or two
+  right before presenting, same known limitation logged in
+  `03_BUILD_TRACKER_TEMPLATE.md`.
 
 ---
 
-# Fallback — Streamlit Community Cloud
+# Fallback options (not used, kept for reference)
 
-Kept as a working fallback since this was already deployed and verified live before
-switching to Kubernetes. Local repo is already committed on `main`.
+These were attempted first and hit account/network blocks, but are documented in case
+the local+tunnel setup becomes unavailable (e.g. laptop issue) and a hosted option is
+worth retrying.
 
-1. Create a new GitHub repo (e.g. `hr-interview-summarizer`) at github.com/new —
-   don't initialize it with a README.
-2. Push this repo to it:
-   ```
-   git remote add origin <your-new-repo-url>
-   git push -u origin main
-   ```
-3. Go to [share.streamlit.io](https://share.streamlit.io) → sign in with GitHub →
-   "New app" → pick your repo/branch → set main file path to `app/app.py`.
-4. In the app's settings → Secrets, add:
-   ```
-   ANTHROPIC_API_KEY = "your-real-key-here"
-   ```
-5. Deploy, then test the live public URL twice with real notes before presenting —
-   the actual Claude call was never verified live in the build environment (no key
-   available there), per `03_BUILD_TRACKER_TEMPLATE.md`.
+## Streamlit Community Cloud
 
-Fallback if Streamlit Cloud has any account/setup friction: Hugging Face Spaces with
-the Streamlit SDK, same `app/` contents.
+1. Push this repo to a GitHub repo (already done — `VaibhavNarule-AI/demo-hacathon`).
+2. Go to [share.streamlit.io](https://share.streamlit.io) → sign in with GitHub →
+   "New app" → pick the repo/branch → set main file path to `app/app.py`.
+3. In the app's settings → Secrets, add `ANTHROPIC_API_KEY = "your-real-key-here"`
+   if you have one.
+4. Deploy. Known issue hit here: pinned dependency versions in `app/requirements.txt`
+   broke on Python 3.14 (pillow had no prebuilt wheel) — already fixed by relaxing the
+   pins to `>=` instead of `==`.
 
-## Alternative: Render.com
+Fallback of the fallback: Hugging Face Spaces with the Streamlit SDK, same `app/`
+contents.
 
-Used instead of Streamlit Cloud due to office-network OAuth issues. A `render.yaml`
-blueprint is already committed at the repo root, so Render can configure the service
-automatically.
+## Render.com
 
-1. Go to [dashboard.render.com](https://dashboard.render.com) → sign in with GitHub.
-2. Click **New** → **Blueprint** → select the `demo-hacathon` repo → Render reads
-   `render.yaml` and pre-fills the service (root dir `app`, build/start commands).
-3. When prompted for the `ANTHROPIC_API_KEY` env var (marked `sync: false` in the
-   blueprint so it's never stored in the repo), paste your real key.
-4. Click **Apply** / **Create**. First deploy takes a few minutes on the free tier.
-5. Render gives a public `https://demo-hacathon.onrender.com`-style URL — test the
-   summarize flow twice with real notes before presenting.
+A `render.yaml` blueprint is committed at the repo root for this.
+1. [dashboard.render.com](https://dashboard.render.com) → sign in with GitHub.
+2. **New** → **Blueprint** → select the `demo-hacathon` repo → Render reads
+   `render.yaml` automatically.
+3. Paste your `ANTHROPIC_API_KEY` when prompted (marked `sync: false`, never stored
+   in the repo).
+4. Deploy — gives a public `https://demo-hacathon.onrender.com`-style URL. Free tier
+   spins down after inactivity (~30s cold start on first hit after idle).
 
-Note: Render's free tier spins the service down after inactivity, so the first
-request after a while will be slow (~30s cold start) — worth knowing before a live
-demo, hit the URL once a minute or two beforehand to warm it up.
+## Docker Hub + remote Kubernetes cluster
+
+If a real remote cluster becomes accessible later: build/push to
+`vaibhavnarule23/demo_hackathon` on Docker Hub, then `kubectl apply` the same
+`k8s/deployment.yaml`/`k8s/service.yaml` after changing the `image:` field back to
+`vaibhavnarule23/demo_hackathon:latest` and removing `imagePullPolicy: Never`.
