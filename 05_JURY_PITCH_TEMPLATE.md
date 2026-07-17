@@ -1,12 +1,12 @@
-# Jury Pitch — SOC Executive Dashboard
+# Jury Pitch — PulseSOC (SOC Executive Command Center)
 
 **One-sentence pitch:** A single-pane, multi-tenant dashboard that turns
-SecurityHub's incident data into 9 correctly-computed KPIs, week-over-week trends,
+PulseSOC's incident data into 9 correctly-computed KPIs, week-over-week trends,
 and drill-down — scoped server-side by role, so a partner or customer only ever
 sees their own slice.
 
 **Why this matters (the problem):** Today leadership and customers have no single
-place to see SOC performance. The data already exists in SecurityHub — it just
+place to see SOC performance. The data already exists in PulseSOC — it just
 isn't surfaced, filtered, or trusted.
 
 **What we built (not a feature list — the flow):** Login → JWT issued with tenant
@@ -56,3 +56,20 @@ a partner manager, or a single customer's viewer.
   is one file, trivial to seed/reset/back up, and the service layer never touches
   SQL directly outside the repository layer, so the migration path is real, just
   deliberately not spent time on today.
+
+- Q: Isn't a 5-minute SLA unrealistic? Real Critical SLAs are hours, not minutes.
+  A: Yes, deliberately — it's a demo setting, not a claim about real SOC practice.
+  The point isn't the number, it's that SLA targets are configurable per partner and
+  per customer at all (`sla_configs`, resolved customer-override → partner-default →
+  global-default), and that the breach math actually uses whatever's configured
+  instead of a hardcoded constant. A real deployment would set 4h/8h/24h and never
+  touch it again.
+
+- Q: How is the Customer Health Score weighted, and why those numbers?
+  A: `100 − (breaches×12) − (fp_rate×0.6) − (avg_mttr_h×1.5)`, clamped 0–100 over a
+  30-day window. Breaches are weighted heaviest because they're the thing a customer
+  actually notices and escalates about; false-positive rate and MTTR matter but
+  don't individually sink the score the way repeated breaches do. It's a starting
+  point tuned against this seed data, not a universal constant — the formula lives
+  in one function (`health_score.py`) specifically so it can be re-weighted per
+  MSSP without touching anything else.

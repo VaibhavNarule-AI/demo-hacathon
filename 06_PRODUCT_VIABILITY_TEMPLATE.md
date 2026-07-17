@@ -1,4 +1,4 @@
-# Product Viability — SOC Executive Dashboard
+# Product Viability — PulseSOC (SOC Executive Command Center)
 
 **Who would pay for / adopt this beyond the hackathon?**
 The MSSP's own account managers (one dashboard per partner instead of manual weekly
@@ -6,7 +6,7 @@ reports) and, white-labeled, the partners' own customers who currently get a sta
 PDF report instead of a live view.
 
 **What's the smallest next version beyond the demo?**
-Swap the seed data for a real SecurityHub read replica (or a scheduled export job)
+Swap the seed data for a real PulseSOC read replica (or a scheduled export job)
 behind the same repository interface — `analytics_service.py` doesn't change, only
 `DB_TYPE` and the repository implementation do.
 

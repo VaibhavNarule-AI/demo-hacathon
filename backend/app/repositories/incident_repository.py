@@ -1,6 +1,16 @@
 from app.repositories.db import get_connection
 
 
+def _eq_or_in(column: str, value: str):
+    """value may be a single id or a comma-separated list (multi-select
+    customer filter) -- either way, always parameterized, never interpolated."""
+    values = [v for v in value.split(",") if v]
+    if len(values) > 1:
+        placeholders = ",".join("?" * len(values))
+        return f"{column} IN ({placeholders})", values
+    return f"{column} = ?", values
+
+
 def build_where(query_filters: dict, tenant_filter: dict):
     """Build a parameterized WHERE clause. Tenant scope always wins over a
     request's own partner/customer query params -- it is never overridden,
@@ -19,15 +29,18 @@ def build_where(query_filters: dict, tenant_filter: dict):
         clauses.append("customer = ?")
         params.append(tenant_filter["customer"])
     elif query_filters.get("customer"):
-        clauses.append("customer = ?")
-        params.append(query_filters["customer"])
+        clause, values = _eq_or_in("customer", query_filters["customer"])
+        clauses.append(clause)
+        params.extend(values)
 
     if query_filters.get("siem"):
-        clauses.append("siem = ?")
-        params.append(query_filters["siem"])
+        clause, values = _eq_or_in("siem", query_filters["siem"])
+        clauses.append(clause)
+        params.extend(values)
     if query_filters.get("soar"):
-        clauses.append("soar = ?")
-        params.append(query_filters["soar"])
+        clause, values = _eq_or_in("soar", query_filters["soar"])
+        clauses.append(clause)
+        params.extend(values)
     if query_filters.get("tier"):
         clauses.append("service_type = ?")
         params.append(query_filters["tier"])
@@ -49,6 +62,24 @@ def fetch_incidents(query_filters: dict, tenant_filter: dict, limit: int = 200):
         rows = conn.execute(
             f"SELECT * FROM incidents WHERE {where_sql} ORDER BY created_time DESC LIMIT ?",
             (*params, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def fetch_open_incidents(tenant_filter: dict):
+    """All currently-open incidents (opened, not yet closed) in tenant scope --
+    deliberately not date-range-bound, since breach risk is about right now,
+    not about whatever historical window the dashboard filter happens to be
+    set to."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT * FROM incidents
+                WHERE {where_sql} AND opened_time IS NOT NULL AND closed_time IS NULL""",
+            params,
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -94,5 +125,85 @@ def bulk_insert_incidents(rows: list[tuple]) -> None:
             rows,
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def next_ticket_number(year: int) -> str:
+    """SENT-<year>-<n>, starting at 1001 for the first live-created ticket of
+    that year -- a separate namespace from the seeded INC-###### tickets."""
+    conn = get_connection()
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) c FROM incidents WHERE ticket_number LIKE ?",
+            (f"SENT-{year}-%",),
+        ).fetchone()["c"]
+        return f"SENT-{year}-{1001 + count}"
+    finally:
+        conn.close()
+
+
+def create_incident(incident: dict) -> dict:
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            """INSERT INTO incidents
+               (ticket_number, partner, customer, severity, status, service_type,
+                siem, soar, sla_result, event_time, created_time, opened_time,
+                first_response_time, closed_time, assigned_analyst, category,
+                summary, mitre_techniques, false_positive)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                incident["ticket_number"],
+                incident["partner"],
+                incident["customer"],
+                incident["severity"],
+                incident["status"],
+                incident["service_type"],
+                incident["siem"],
+                incident["soar"],
+                incident["sla_result"],
+                incident["event_time"],
+                incident["created_time"],
+                incident["opened_time"],
+                incident["first_response_time"],
+                incident["closed_time"],
+                incident["assigned_analyst"],
+                incident["category"],
+                incident["summary"],
+                incident["mitre_techniques"],
+                incident["false_positive"],
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM incidents WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def close_incident_row(incident_id: int, tenant_filter: dict, closed_time: str, sla_result: str, resolution_notes):
+    """Tenant-scoped close -- the WHERE clause is the same one every other
+    read/write in this repository goes through, so a partner_manager can't
+    close a ticket outside their own scope any more than they can read one."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            f"""UPDATE incidents
+                SET closed_time = ?, status = 'Closed', sla_result = ?,
+                    summary = CASE WHEN ? IS NOT NULL AND ? != ''
+                                   THEN summary || ' | Resolution: ' || ?
+                                   ELSE summary END
+                WHERE id = ? AND {where_sql}""",
+            (closed_time, sla_result, resolution_notes, resolution_notes or "", resolution_notes, incident_id, *params),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+        row = conn.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone()
+        return dict(row)
     finally:
         conn.close()

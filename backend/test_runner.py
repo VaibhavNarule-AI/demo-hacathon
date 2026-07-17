@@ -78,6 +78,16 @@ def raw_db_query(sql, params=()):
     return row
 
 
+# A 90-day window ending now -- wide enough to cover all seed data (which
+# spans exactly 90 days ending when seed.py ran, just before this), but
+# within the analytics_service.MAX_RANGE_DAYS cap. A wider literal range
+# (e.g. 2020-2030) would now get rejected with 400, which is the point of
+# the cap -- these tests shouldn't route around it.
+_now = datetime.datetime.now(datetime.timezone.utc)
+frm = (_now - datetime.timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%S")
+to = _now.strftime("%Y-%m-%dT%H:%M:%S")
+
+
 # TC-01 -----------------------------------------------------------------
 res = login("superadmin", "Admin@123")
 record(
@@ -113,7 +123,7 @@ res = login("partner_mgr", "Partner@123")
 pm_token = res.json()["access_token"]
 res = client.get(
     "/api/incidents",
-    params={"partner": "partner-b", "from": "2020-01-01T00:00:00", "to": "2030-01-01T00:00:00"},
+    params={"partner": "partner-b", "from": frm, "to": to},
     headers={"Authorization": f"Bearer {pm_token}"},
 )
 partners_seen = {row["partner"] for row in res.json()} if res.status_code == 200 else set()
@@ -125,7 +135,6 @@ record(
 )
 
 # TC-05 -----------------------------------------------------------------
-frm, to = "2020-01-01T00:00:00", "2030-01-01T00:00:00"
 expected_alerts = raw_db_query(
     "SELECT COUNT(*) c FROM incidents WHERE created_time BETWEEN ? AND ?", (frm, to)
 )["c"]
@@ -216,6 +225,144 @@ record(
 )
 
 
+def _resolve_expected_sla(partner, customer, severity):
+    row = raw_db_query(
+        "SELECT sla_minutes FROM sla_configs WHERE partner_id=? AND customer_id=? AND severity=?",
+        (partner, customer, severity),
+    )
+    if row:
+        return row["sla_minutes"]
+    row = raw_db_query(
+        "SELECT sla_minutes FROM sla_configs WHERE partner_id=? AND customer_id IS NULL AND severity=?",
+        (partner, severity),
+    )
+    if row:
+        return row["sla_minutes"]
+    return {"Critical": 240, "Major": 480, "Minor": 1440}[severity]
+
+
+def create_test_incident(customer, severity, summary):
+    res = client.post(
+        "/api/incidents/create",
+        json={
+            "customer": customer, "severity": severity, "category": "Malware",
+            "summary": summary, "siem": "QRADAR", "soar": "XSOAR",
+        },
+        headers={"Authorization": f"Bearer {sa_token}"},
+    )
+    return res
+
+
+def get_breach_risk():
+    return client.get("/api/analytics/breach-risk", headers={"Authorization": f"Bearer {sa_token}"}).json()
+
+
+# TC-11 -------------------------------------------------------------------
+create_res = create_test_incident("customer-1", "Critical", "TC-11 breach predictor check")
+tc11_id = create_res.json()["id"] if create_res.status_code == 201 else None
+expected_target = _resolve_expected_sla("partner-a", "customer-1", "Critical")
+match = next((r for r in get_breach_risk() if r["incident_id"] == tc11_id), None)
+record(
+    "TC-11", "Breach Predictor: freshly opened incident shows correct SLA target and near-zero elapsed",
+    "The breach predictor's whole value is the SLA target and elapsed time being right the instant a ticket opens -- if the math is off here, the countdown shown to an analyst is meaningless.",
+    f"present in breach-risk, sla_target_minutes={expected_target}, elapsed_mins<2",
+    f"{match}",
+    match is not None and match["sla_target_minutes"] == expected_target and match["elapsed_mins"] < 2,
+)
+
+# TC-12 -------------------------------------------------------------------
+now = datetime.datetime.now(datetime.timezone.utc)
+since = (now - datetime.timedelta(days=30)).isoformat()
+row = raw_db_query(
+    "SELECT COUNT(*) alerts, SUM(sla_result='Breached') breaches, SUM(false_positive) fp "
+    "FROM incidents WHERE customer='customer-1' AND created_time BETWEEN ? AND ?",
+    (since, now.isoformat()),
+)
+alerts_n, breaches_n, fp_n = row["alerts"] or 0, row["breaches"] or 0, row["fp"] or 0
+fp_rate = (fp_n / alerts_n * 100) if alerts_n else 0
+mttr_row = raw_db_query(
+    "SELECT AVG((julianday(closed_time) - julianday(opened_time)) * 24) m FROM incidents "
+    "WHERE customer='customer-1' AND opened_time IS NOT NULL AND closed_time IS NOT NULL "
+    "AND created_time BETWEEN ? AND ?",
+    (since, now.isoformat()),
+)
+avg_mttr = mttr_row["m"] or 0
+expected_health = max(0, min(100, round(100 - breaches_n * 12 - fp_rate * 0.6 - avg_mttr * 1.5, 1)))
+health_res = client.get("/api/analytics/customer-health", headers={"Authorization": f"Bearer {sa_token}"})
+health_match = next((r for r in health_res.json() if r["customer_id"] == "customer-1"), None)
+record(
+    "TC-12", "Customer Health Score calc: 100 - breaches*12 - fp_rate*0.6 - avg_mttr_h*1.5, clamped 0-100",
+    "This is the number an account manager reads out in a QBR -- it has to match a from-scratch recomputation off the raw 30-day incident data, not just agree with itself.",
+    str(expected_health), str(health_match["health_score"] if health_match else None),
+    health_match is not None and abs(health_match["health_score"] - expected_health) < 0.2,
+)
+
+# TC-13 -------------------------------------------------------------------
+before_alerts = client.get("/api/analytics/kpis", headers={"Authorization": f"Bearer {sa_token}"}).json()["alerts"]["value"]
+create_res2 = create_test_incident("customer-1", "Minor", "TC-13 live creation check")
+after_alerts = client.get("/api/analytics/kpis", headers={"Authorization": f"Bearer {sa_token}"}).json()["alerts"]["value"]
+record(
+    "TC-13", "Live ticket creation updates KPIs without a page reload",
+    "The whole 'live command center' pitch depends on a newly created ticket actually moving the numbers, not just existing quietly in the DB.",
+    f"alerts count increases by 1 (from {before_alerts})",
+    f"before={before_alerts}, after={after_alerts}, create_status={create_res2.status_code}",
+    create_res2.status_code == 201 and after_alerts == before_alerts + 1,
+)
+
+# TC-14 -------------------------------------------------------------------
+override_res = client.post(
+    "/api/sla-config",
+    json={"partner_id": "partner-a", "customer_id": "customer-2", "severity": "Major", "sla_minutes": 15},
+    headers={"Authorization": f"Bearer {sa_token}"},
+)
+create_res3 = create_test_incident("customer-2", "Major", "TC-14 sla override check")
+tc14_id = create_res3.json()["id"] if create_res3.status_code == 201 else None
+match2 = next((r for r in get_breach_risk() if r["incident_id"] == tc14_id), None)
+record(
+    "TC-14", "SLA config override: custom per-customer SLA is used instead of the global default",
+    "A partner_manager configuring a tighter SLA for one customer has to actually change the breach math for that customer, or the whole 'configure SLA' feature is cosmetic.",
+    "sla_target_minutes == 15 (overridden), not 480 (Major default)",
+    f"{match2['sla_target_minutes'] if match2 else None}",
+    override_res.status_code == 201 and match2 is not None and match2["sla_target_minutes"] == 15,
+)
+
+# TC-15 -------------------------------------------------------------------
+client.post(
+    "/api/sla-config",
+    json={"partner_id": "partner-a", "customer_id": "customer-3", "severity": "Critical", "sla_minutes": 5},
+    headers={"Authorization": f"Bearer {sa_token}"},
+)
+create_res4 = create_test_incident("customer-3", "Critical", "TC-15 blinking check")
+tc15_id = create_res4.json()["id"] if create_res4.status_code == 201 else None
+match3 = next((r for r in get_breach_risk() if r["incident_id"] == tc15_id), None)
+record(
+    "TC-15", "Blinking critical: Critical incident with <=5 min SLA remaining is flagged blinking_critical",
+    "This flag is what drives the war-room banner and the blinking ticket chip -- if it doesn't fire the instant a tight-SLA Critical ticket is created, the signature demo moment doesn't happen.",
+    "blinking_critical == True",
+    f"{match3['blinking_critical'] if match3 else None}",
+    match3 is not None and match3["blinking_critical"] is True,
+)
+
+# TC-16 -------------------------------------------------------------------
+close_res = client.post(
+    f"/api/incidents/{tc15_id}/close",
+    json={"resolution_notes": "TC-16 automated close"},
+    headers={"Authorization": f"Bearer {sa_token}"},
+)
+still_present = any(r["incident_id"] == tc15_id for r in get_breach_risk())
+close_body = close_res.json() if close_res.status_code == 200 else {}
+record(
+    "TC-16", "Closing an incident within SLA marks it Matched, drops it from breach-risk, logs SLA SAVED",
+    "The 'Close / Resolve Now' action is the payoff of the whole breach-predictor flow -- it has to actually resolve the ticket, credit it as SLA-Matched, and stop counting it down.",
+    "sla_result == 'Matched', sla_saved_message present, no longer in breach-risk",
+    f"sla_result={close_body.get('sla_result')}, saved_msg={close_body.get('sla_saved_message')}, still_in_risk={still_present}",
+    close_res.status_code == 200
+    and close_body.get("sla_result") == "Matched"
+    and close_body.get("sla_saved_message") is not None
+    and not still_present,
+)
+
+
 # -------------------------------------------------------------------------
 # Output: CSV tracker, HTML report, log
 # -------------------------------------------------------------------------
@@ -242,7 +389,7 @@ def write_html_report(path):
         for r in results
     )
     html = f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>SOC Dashboard — Test Report</title>
+<html><head><meta charset="utf-8"><title>PulseSOC — Test Report</title>
 <style>
 body {{ font-family: system-ui, sans-serif; margin: 2rem; background: #0b1220; color: #e7ecf5; }}
 h1 {{ font-size: 1.4rem; }}
@@ -296,7 +443,7 @@ def push_to_kiwi(path):
     try:
         req = urllib.request.Request(
             kiwi_url.rstrip("/") + "/xml-rpc/",
-            data=json.dumps({"summary": f"SOC Dashboard run: {passed}/{len(results)} passed"}).encode(),
+            data=json.dumps({"summary": f"PulseSOC run: {passed}/{len(results)} passed"}).encode(),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": "Basic "

@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: soc-dashboard
-          image: soc-dashboard:v1-local
+          image: pulsesoc:v2
           imagePullPolicy: Never
           ports:
             - containerPort: 8000

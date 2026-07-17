@@ -22,6 +22,17 @@ def fetch_customers(tenant_filter: dict):
         conn.close()
 
 
+def get_customer(customer_id: str):
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM customers WHERE customer_id = ?", (customer_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def bulk_insert_customers(rows: list[tuple]) -> None:
     conn = get_connection()
     try:

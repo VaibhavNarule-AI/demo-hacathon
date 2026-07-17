@@ -89,3 +89,38 @@ class KPIResponse(BaseModel):
 class TrendPoint(BaseModel):
     week_start: str
     values: dict
+
+
+class CreateIncidentRequest(BaseModel):
+    customer: str
+    severity: str
+    category: str
+    summary: str
+    siem: str
+    soar: str
+    assigned_analyst: Optional[str] = None
+
+
+class CloseIncidentRequest(BaseModel):
+    resolution_notes: Optional[str] = None
+
+
+class SlaConfigRequest(BaseModel):
+    partner_id: str
+    customer_id: Optional[str] = None
+    severity: str
+    sla_minutes: int
+
+
+class RegisterPartnerRequest(BaseModel):
+    partner_name: str
+    partner_id: str
+    contact_email: Optional[str] = None
+
+
+class CreatePartnerCustomerRequest(BaseModel):
+    customer_name: str
+    customer_id: str
+    service_tier: str
+    siem: str
+    soar: str

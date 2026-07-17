@@ -3,6 +3,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Admin from "./pages/Admin";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
+import Partners from "./pages/Partners";
 import Unauthorized from "./pages/Unauthorized";
 
 const ALL_ROLES = ["super_admin", "partner_manager", "customer_viewer", "analyst"];
@@ -26,6 +27,14 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={["super_admin"]}>
               <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/partners"
+          element={
+            <ProtectedRoute allowedRoles={["super_admin", "partner_manager"]}>
+              <Partners />
             </ProtectedRoute>
           }
         />

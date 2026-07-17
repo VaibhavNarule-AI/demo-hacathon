@@ -13,6 +13,15 @@ Assumptions (documented alongside 02_SOLUTION_ARCHITECTURE_TEMPLATE.md):
   MTTR-based breach rule, which needs a resolution time to evaluate against).
 - service_type on an incident is denormalized from the customer's service_tier
   (Gold/Silver/Bronze) at creation time -- this is what the "Tier" filter queries.
+- Closure chance scales with age (20% at the moment it's opened, ~97%+ once 3+
+  days old) instead of a flat rate -- otherwise a static seed leaves thousands
+  of months-old incidents open forever, which would make the SLA breach
+  predictor surface stale zombie tickets instead of genuinely recent risk.
+- Critical incidents mostly resolve inside the 4h SLA (75% in 0.5-3.8h), a
+  minority breach it (25% in 4.2-30h) -- a flat 2-48h resolution time
+  regardless of severity would make ~96% of closed Criticals breach, which
+  isn't realistic for a team that actually treats P1 as P1, and would crush
+  every customer's health score to 0.
 """
 
 import csv
@@ -27,6 +36,7 @@ from app.core.auth import hash_password  # noqa: E402
 from app.repositories.customer_repository import bulk_insert_customers  # noqa: E402
 from app.repositories.db import get_connection, init_db, reset_db  # noqa: E402
 from app.repositories.incident_repository import bulk_insert_incidents  # noqa: E402
+from app.repositories.partner_repository import create_partner  # noqa: E402
 from app.repositories.user_repository import create_user  # noqa: E402
 
 random.seed(42)
@@ -49,7 +59,7 @@ MITRE_TECHNIQUES = [
 ]
 ANALYSTS = ["A. Rao", "K. Mehta", "S. Iyer", "J. Fernandes", "P. Shah", "R. Nair"]
 
-NOW = datetime.datetime.now().replace(microsecond=0)
+NOW = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
 WINDOW_DAYS = 90
 SPIKE_DAYS = 14
 TOTAL_INCIDENTS = 5000
@@ -97,8 +107,33 @@ def build_incident(i, customer):
             first_response_time = opened_time + datetime.timedelta(minutes=random.randint(5, 120))
             assigned_analyst = random.choice(ANALYSTS)
             status = "Open"
-            if random.random() < 0.60:
-                closed_time = opened_time + datetime.timedelta(hours=random.uniform(2, 48))
+
+            # Realistic ops hygiene: the older an incident is, the more certain
+            # it's been closed by now -- only genuinely recent opens have a real
+            # chance of still being open. Without this, a static 90-day seed
+            # leaves thousands of months-old "zombie" tickets open forever,
+            # which makes the breach predictor surface stale noise instead of
+            # a small, meaningful, genuinely-at-risk-right-now set.
+            days_since_opened = (NOW - opened_time).total_seconds() / 86400
+            closure_chance = min(0.97, 0.20 + days_since_opened * 0.30)
+
+            if random.random() < closure_chance:
+                if severity == "Critical":
+                    # Most Criticals resolve inside the 4h SLA; a minority
+                    # breach it -- uniform 2-48h regardless of severity would
+                    # make ~96% of closed Criticals breach, which isn't
+                    # realistic for a team that treats P1 as P1.
+                    if random.random() < 0.75:
+                        resolution_hours = random.uniform(0.5, 3.8)
+                    else:
+                        resolution_hours = random.uniform(4.2, 30)
+                else:
+                    # A well-run SOC resolves non-Critical incidents same/next
+                    # business day, not "up to 2 days" flat -- this range keeps
+                    # variety while giving a low-breach, low-FP customer a
+                    # realistic shot at a "Healthy" customer health score.
+                    resolution_hours = random.uniform(1, 10)
+                closed_time = opened_time + datetime.timedelta(hours=resolution_hours)
                 mttr_hours = (closed_time - opened_time).total_seconds() / 3600
                 sla_result = "Breached" if (severity == "Critical" and mttr_hours > 4) else "Matched"
                 status = "Closed"
@@ -149,6 +184,10 @@ def main():
     print("Step 1: initializing schema and clearing existing demo data")
     init_db()
     reset_db()
+
+    print("Step 1b: registering partner-a / partner-b in the partner directory")
+    create_partner("Partner A", "partner-a", "ops@partner-a.example")
+    create_partner("Partner B", "partner-b", "ops@partner-b.example")
 
     print("Step 2: generating 20 customers across partner-a / partner-b")
     customers = build_customers()

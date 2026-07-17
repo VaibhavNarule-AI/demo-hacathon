@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>SOC Executive Dashboard — Presentation</title>
+<title>PulseSOC — Presentation</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -32,21 +32,28 @@
   table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin-bottom: 1rem; }
   th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
   th { background: var(--surface-raised); color: var(--text-soft); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  .cost-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 1rem; margin-top: 1rem; }
-  .cost-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; }
+  .cost-grid, .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 1rem; margin-top: 1rem; }
+  .cost-card, .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; }
   .cost-card .k { color: var(--bad); font-weight: 700; font-size: 1.3rem; }
-  .flow-diagram {
+  .feature-card .k { color: var(--accent); font-weight: 700; font-size: 1rem; margin-bottom: 0.4rem; }
+  .flow-diagram, .wizard-flow {
     display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1.2rem 0;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem;
   }
-  .flow-diagram .box { background: var(--surface); border: 1px solid var(--accent); color: var(--accent); border-radius: 7px; padding: 0.5rem 0.8rem; }
-  .flow-diagram .arrow { color: var(--text-soft); }
+  .flow-diagram .box, .wizard-flow .box { background: var(--surface); border: 1px solid var(--accent); color: var(--accent); border-radius: 7px; padding: 0.5rem 0.8rem; }
+  .flow-diagram .arrow, .wizard-flow .arrow { color: var(--text-soft); }
   .badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.15em 0.55em; border-radius: 5px; }
   .badge.good { background: var(--good-soft); color: var(--good); }
   .badge.bad { background: var(--bad-soft); color: var(--bad); }
   .badge.warn { background: var(--warn-soft); color: var(--warn); }
   .pitch-line { font-size: 1.3rem; font-weight: 600; color: var(--good); border-left: 3px solid var(--good); padding-left: 1rem; margin-top: 1.6rem; }
   ul.tight li { margin-bottom: 0.4rem; }
+  .mock-screen { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; margin-top: 1rem; }
+  .mock-ring { width: 46px; height: 46px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; margin-right: 0.6rem; }
+  .mock-progress { height: 8px; border-radius: 999px; background: var(--surface-raised); overflow: hidden; margin: 0.4rem 0; }
+  .mock-progress > div { height: 100%; }
+  .blink-demo { display: inline-block; padding: 0.15em 0.6em; border-radius: 5px; background: #ef4444; color: #fff; font-family: ui-monospace, Menlo, Consolas, monospace; animation: pres-blink 1s infinite; }
+  @keyframes pres-blink { 0%,100% { background: #ef4444; } 50% { background: #991b1b; } }
 </style>
 </head>
 <body>
@@ -65,8 +72,8 @@
 
 <section>
   <p class="slide-label">Slide 2 — Architecture</p>
-  <h1>One process, four logical services, RBAC enforced server-side</h1>
-  <h2>4-hour build: logically split, physically one FastAPI process — same code, four containers whenever it's worth it.</h2>
+  <h1>PulseSOC — one process, four logical services, RBAC enforced server-side</h1>
+  <h2>Logically split, physically one FastAPI process — same code, four containers whenever it's worth it.</h2>
 
   <h3>RBAC Matrix</h3>
   <table>
@@ -111,28 +118,106 @@
 </section>
 
 <section>
-  <p class="slide-label">Slide 4 — Trends, Drill-down &amp; Early Warning</p>
-  <h1>Beyond the KPI cards</h1>
-  <h2>Two weekly trend charts, incident-level drill-down, and a live SLA-breach early warning.</h2>
-  <ul class="tight">
-    <li><strong>Volume trend</strong> — alerts vs. incidents, weekly, showing the funnel narrowing</li>
-    <li><strong>MTTR vs SLA trend</strong> — dual-axis: resolution speed against compliance, side by side</li>
-    <li><strong>Drill-down</strong> — click any incident for MITRE technique, assigned analyst, and a category-specific recommendation</li>
-    <li><strong>Early warning (bonus)</strong> — a <span class="badge warn">P1 at risk</span> banner surfaces any Critical incident open 3+ hours, before it crosses the 4-hour SLA breach threshold — the difference between reacting to a breach and preventing one</li>
+  <p class="slide-label">Slide 4 — Killer Feature 1</p>
+  <h1>SLA Breach Predictor — future, not past</h1>
+  <h2>Every open incident's SLA target, elapsed time, and countdown — recomputed live, not looked up after the fact.</h2>
+  <div class="mock-screen">
+    <p style="margin:0 0 0.6rem;color:var(--bad);font-weight:700;">⚠️ 3 incidents at risk of SLA breach — Act now</p>
+    <div><span class="blink-demo">SENT-2026-1001</span> &nbsp; customer-3 &nbsp; Critical</div>
+    <div class="mock-progress"><div style="width:96%;background:var(--bad);"></div></div>
+    <p style="color:var(--text-soft);font-size:0.85rem;margin:0;">4 min left · Close / Resolve Now →</p>
+  </div>
+  <ul class="tight" style="margin-top:1rem;">
+    <li>SLA targets are configurable per partner and per customer — not hardcoded</li>
+    <li>&lt;=5 min left on a Critical (or &lt;=15 min on a Major) → <strong>blinking_critical</strong>, which drives the war-room banner and the blinking ticket chip</li>
+    <li>Already-breached tickets are labeled <code>BREACHED</code>, not <code>HIGH</code> — a prediction that already happened isn't a prediction</li>
   </ul>
 </section>
 
 <section>
-  <p class="slide-label">Slide 5 — Proof &amp; Pitch</p>
-  <h1>Four things you can check yourself, not four things we're asking you to trust</h1>
+  <p class="slide-label">Slide 5 — Killer Feature 2</p>
+  <h1>Customer Health Score — QBR ready</h1>
+  <h2>One number an account manager can read out loud in a quarterly business review.</h2>
+  <div class="mock-screen feature-grid">
+    <div class="feature-card">
+      <span class="mock-ring" style="background:var(--good-soft);color:var(--good);">92</span>
+      <strong>Partner A Customer 5</strong>
+      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">Healthy · No major issues</p>
+    </div>
+    <div class="feature-card">
+      <span class="mock-ring" style="background:var(--warn-soft);color:var(--warn);">63</span>
+      <strong>Partner B Customer 3</strong>
+      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">At Risk · MTTR 23.0h</p>
+    </div>
+    <div class="feature-card">
+      <span class="mock-ring" style="background:var(--bad-soft);color:var(--bad);">9</span>
+      <strong>Partner B Customer 1</strong>
+      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">Critical · 4 SLA breaches</p>
+    </div>
+  </div>
+  <ul class="tight" style="margin-top:1rem;">
+    <li><code>health = 100 − (breaches×12) − (fp_rate×0.6) − (avg_mttr_h×1.5)</code>, clamped 0–100, over a 30-day window</li>
+    <li>Click any card → whole dashboard filters to that customer</li>
+    <li>Export PDF button — real browser print-to-PDF, no extra library</li>
+  </ul>
+</section>
+
+<section>
+  <p class="slide-label">Slide 6 — Killer Feature 3</p>
+  <h1>Live Command Center Mode</h1>
+  <h2>Full-screen, dark, built for a war room — not a screenshot of one.</h2>
+  <ul class="tight">
+    <li>9 KPI cards, auto-refreshing every 10 seconds straight from <code>/api/analytics/kpis</code></li>
+    <li>A changed number pulses — you see the shift the instant it happens</li>
+    <li>Bottom ticker scrolls the latest incident activity, war-room-marquee style</li>
+    <li>Large "Last updated Xs ago" timer; <code>Esc</code> to exit</li>
+  </ul>
+  <div class="mock-screen" style="background:#050a14;border-color:#1c2c47;">
+    <div style="display:flex;gap:1rem;">
+      <div style="flex:1;text-align:center;padding:1rem;background:#0e1a2e;border-radius:10px;">
+        <div style="color:#6f83a8;font-size:0.75rem;text-transform:uppercase;">Critical Alerts</div>
+        <div style="font-size:1.8rem;font-weight:800;">47</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:1rem;background:#0e1a2e;border-radius:10px;">
+        <div style="color:#6f83a8;font-size:0.75rem;text-transform:uppercase;">SLA Compliance</div>
+        <div style="font-size:1.8rem;font-weight:800;">91.2%</div>
+      </div>
+    </div>
+    <p style="color:#9db3d6;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8rem;margin:1rem 0 0;">Critical incident from customer-3 · QRADAR · SENT-2026-1001 &nbsp;•&nbsp; ...</p>
+  </div>
+</section>
+
+<section>
+  <p class="slide-label">Slide 7 — Live Demo (60 seconds)</p>
+  <h1>Partner Registration → SLA Config → Ticket Blink → Close to Save SLA</h1>
+  <h2>Zero seed data, zero pre-baked demo — built live, in front of the judges, via Demo Setup.</h2>
+  <div class="wizard-flow">
+    <span class="box">Register "Demo Partner"</span><span class="arrow">→</span>
+    <span class="box">Create "Demo Customer"</span><span class="arrow">→</span>
+    <span class="box">Set Critical SLA = 5 min</span><span class="arrow">→</span>
+    <span class="box">Create Critical ticket</span><span class="arrow">→</span>
+    <span class="box"><span class="blink-demo">Blinking in Early Warning</span></span><span class="arrow">→</span>
+    <span class="box">Close / Resolve Now</span>
+  </div>
+  <ul class="tight">
+    <li>Ticket appears blinking <strong>immediately</strong> — a 5-minute SLA means 5 minutes elapsed is already the whole budget</li>
+    <li>War Room banner flashes red at the top of the screen with a live 1-second countdown</li>
+    <li>Closing it before the buzzer: toast "SLA saved with N min left!" + confetti + KPI/health-score refresh, no reload</li>
+    <li>Every step logged to <code>logs/flow.log</code> — partner registered, SLA configured, ticket created, SLA saved</li>
+  </ul>
+</section>
+
+<section>
+  <p class="slide-label">Slide 8 — Proof &amp; Pitch</p>
+  <h1>Things you can check yourself, not things we're asking you to trust</h1>
   <table>
     <tr><th>Proof</th><th>Where</th></tr>
-    <tr><td>Work happened</td><td><code>logs/</code> — one log per build stage</td></tr>
-    <tr><td>It's correct</td><td><code>testcases/test_report.html</code> — 10/10, including tenant isolation &amp; KPI math cross-checked against raw SQL</td></tr>
+    <tr><td>Work happened</td><td><code>logs/</code> — one log per build stage, plus every live action (ticket create, SLA save, partner register)</td></tr>
+    <tr><td>It's correct</td><td><code>testcases/test_report.html</code> — 16/16, including breach-predictor math, health-score formula, and SLA overrides all cross-checked against raw SQL</td></tr>
     <tr><td>Independently verified</td><td>Kiwi TCMS run — <code>dev.securityhub365.com/kiwi/runs/search/</code></td></tr>
     <tr><td>Actually delivered</td><td>GitHub commit history</td></tr>
   </table>
-  <p class="pitch-line">One docker-compose up for your MSSP.</p>
+  <p class="pitch-line">One docker-compose up for your MSSP — with a war room built in.</p>
 </section>
 
 </body>

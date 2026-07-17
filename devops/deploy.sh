@@ -3,8 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "Step 1: docker build -t soc-dashboard:v1-local ."
-docker build -t soc-dashboard:v1-local .
+echo "Step 1: docker build -t pulsesoc:v2 ."
+docker build -t pulsesoc:v2 .
 
 echo "Step 2: seeding demo data (5,000 incidents, 20 customers, 4 users)"
 python3 backend/seed.py
@@ -26,7 +26,7 @@ curl -sf http://localhost:8000/health > /dev/null && echo "/health OK on :8000"
 
 echo "Step 5: loading image into cluster (minikube's docker driver runs its own daemon)"
 if docker ps --format '{{.Names}}' | grep -qx minikube; then
-  docker save soc-dashboard:v1-local | docker exec -i minikube docker load
+  docker save pulsesoc:v2 | docker exec -i minikube docker load
 else
   echo "no separate minikube container found -- assuming the cluster shares this host's image store"
 fi

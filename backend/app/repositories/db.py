@@ -48,6 +48,25 @@ CREATE TABLE IF NOT EXISTS incidents (
 CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_time);
 CREATE INDEX IF NOT EXISTS idx_incidents_partner ON incidents(partner);
 CREATE INDEX IF NOT EXISTS idx_incidents_customer ON incidents(customer);
+
+CREATE TABLE IF NOT EXISTS partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_name TEXT NOT NULL,
+    partner_id TEXT UNIQUE NOT NULL,
+    contact_email TEXT,
+    created_at TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS sla_configs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id TEXT NOT NULL,
+    customer_id TEXT,
+    severity TEXT NOT NULL CHECK(severity IN ('Critical','Major','Minor')),
+    sla_minutes INTEGER NOT NULL,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -71,7 +90,8 @@ def reset_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(
-            "DELETE FROM incidents; DELETE FROM customers; DELETE FROM users;"
+            "DELETE FROM incidents; DELETE FROM customers; DELETE FROM users; "
+            "DELETE FROM partners; DELETE FROM sla_configs;"
         )
         conn.commit()
     finally:

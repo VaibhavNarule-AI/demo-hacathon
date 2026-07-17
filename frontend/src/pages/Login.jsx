@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Logo from "../components/Logo";
 import api from "../services/api";
 
 const DEMO_USERS = [
@@ -26,6 +27,7 @@ export default function Login() {
       console.log("Step 2: JWT issued, role =", res.data.role);
 
       localStorage.setItem("token", res.data.access_token);
+      localStorage.setItem("username", username);
       localStorage.setItem("role", res.data.role);
       localStorage.setItem("partner_id", res.data.partner_id || "");
       localStorage.setItem("customer_id", res.data.customer_id || "");
@@ -43,8 +45,11 @@ export default function Login() {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <h1>SOC Executive Dashboard</h1>
-        <p className="sub">Sign in to view your scoped operational view.</p>
+        <div className="login-brand">
+          <Logo size={36} />
+        </div>
+        <h1>PulseSOC</h1>
+        <p className="sub">SOC Executive Command Center — sign in to view your scoped operational view.</p>
         {error && <div className="error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div>

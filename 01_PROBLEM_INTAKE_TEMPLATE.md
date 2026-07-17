@@ -1,15 +1,15 @@
 # Problem Intake
 
-**Use case name:** SOC Executive Dashboard (HACK-SOC-01)
+**Use case name:** PulseSOC — SOC Executive Command Center (HACK-SOC-01)
 
 **Who is the user?**
 A multi-tenant MSSP (Managed Security Service Provider) SOC that serves many
 customers across multiple partners. Detections come from each customer's own SIEM
 (IBM QRadar "Offence" or Cortex XSIAM "Issue"), get turned into incident tickets in
-the internal platform (SecurityHub) via playbook automation, and analysts triage,
+the internal platform (PulseSOC) via playbook automation, and analysts triage,
 open, work, and close them. Today there is no single place for leadership or
 customers to see SOC performance — alert volume, detection/response speed, SLA
-compliance, noise (false positives). The data exists in SecurityHub; it just isn't
+compliance, noise (false positives). The data exists in PulseSOC; it just isn't
 surfaced.
 
 **What's the core flow (one sentence)?**

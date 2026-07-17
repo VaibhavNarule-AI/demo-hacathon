@@ -1,4 +1,4 @@
-# Solution Architecture — SOC Executive Dashboard
+# Solution Architecture — PulseSOC (SOC Executive Command Center)
 
 _Filled by `solution-architect`. Every decision needs a WHY, not just a what._
 
@@ -150,6 +150,33 @@ implementation — the service layer (`analytics_service.py`) never touches SQL/
 directly, only the repository interface, so the KPI math doesn't change when the
 storage does.
 
+**Added for partner onboarding + configurable SLA (winner-round features):**
+
+```sql
+CREATE TABLE partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_name TEXT NOT NULL,
+    partner_id TEXT UNIQUE NOT NULL,
+    contact_email TEXT,
+    created_at TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE sla_configs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    partner_id TEXT NOT NULL,
+    customer_id TEXT,                         -- NULL = partner-wide default
+    severity TEXT NOT NULL CHECK(severity IN ('Critical','Major','Minor')),
+    sla_minutes INTEGER NOT NULL,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+);
+```
+
+`sla_configs` resolution order (see `sla_config_repository.resolve_sla_minutes`):
+customer-specific override → partner-wide default → global default
+(Critical=240min, Major=480min, Minor=1440min).
+
 ## KPI Computation Logic — assumptions documented
 
 All computed in `compute_kpis(filters)` in `app/services/analytics_service.py`,
@@ -158,10 +185,10 @@ filters are active.
 
 | KPI | Formula | Assumption |
 |---|---|---|
-| **Alerts** | `COUNT(*) WHERE created_time BETWEEN from AND to` | Every row that reaches SecurityHub counts as an alert, regardless of whether it becomes an incident |
+| **Alerts** | `COUNT(*) WHERE created_time BETWEEN from AND to` | Every row that reaches PulseSOC counts as an alert, regardless of whether it becomes an incident |
 | **Critical Alerts** | Alerts `WHERE severity = 'Critical'` | — |
 | **Incidents** | `COUNT(*) WHERE opened_time IS NOT NULL AND created_time BETWEEN from AND to` | The alert→incident funnel: an alert only becomes a counted "incident" once an analyst opens it |
-| **Avg MTTD** | `AVG(created_time - event_time)`, minutes, incidents with both times | MTTD = detection latency: how long between the SIEM seeing it (`event_time`) and SecurityHub creating the ticket (`created_time`) |
+| **Avg MTTD** | `AVG(created_time - event_time)`, minutes, incidents with both times | MTTD = detection latency: how long between the SIEM seeing it (`event_time`) and PulseSOC creating the ticket (`created_time`) |
 | **Avg MTTR** | `AVG(closed_time - opened_time)`, hours, `WHERE closed_time IS NOT NULL` | Only closed incidents count — an open incident has no resolution time yet, including it would bias MTTR down |
 | **SLA Compliance %** | `Matched / (Matched + Breached) * 100` | `sla_result = 'none'` (never opened) is excluded entirely — you can't breach an SLA clock that never started |
 | **SLA Breaches** | `COUNT(*) WHERE sla_result = 'Breached'` | — |
@@ -181,8 +208,18 @@ filters are active.
 | `GET` | `/api/analytics/kpis` | Same filters → all 9 KPIs + WoW deltas |
 | `GET` | `/api/analytics/trends` | `?metric=volume\|mttr&bucket=weekly` → weekly-bucketed series |
 | `GET` | `/api/incidents/{id}` | Drill-down: full incident detail incl. MITRE techniques, analyst, recommendation |
+| `POST` | `/api/incidents/create` | analyst/super_admin only — creates a ticket (`SENT-<year>-<n>`), immediately opened so it enters the breach countdown |
+| `POST` | `/api/incidents/{id}/close` | Closes a ticket, computes `sla_result` against the effective SLA target, logs SLA SAVED/BREACHED |
 | `GET` | `/api/customers` | Reference data — customers visible to the caller's tenant scope |
+| `GET` | `/api/analytics/breach-risk` | SLA Breach Predictor — open incidents sorted by risk, incl. `blinking_critical` |
+| `GET` | `/api/analytics/customer-health` | Customer Health Score — one row per customer, 30-day window |
+| `GET` | `/api/sla-config?partner=` | Current SLA overrides for a partner (tenant-scoped) |
+| `POST` | `/api/sla-config` | super_admin/partner_manager (own partner only) — set a per-partner or per-customer SLA target |
+| `POST` | `/api/partners/register` | super_admin only — register a new partner |
+| `GET` | `/api/partners/list` | super_admin only — all partners + customer counts |
+| `GET` | `/api/partners/{partner_id}/customers` | Customers under a partner (tenant-scoped) |
+| `POST` | `/api/partners/{partner_id}/customers/create` | super_admin/partner_manager (own partner only) — onboard a customer |
 | `GET` | `/health` | Liveness — used by `devops/deploy.sh` and the demo |
 | `POST` | `/demo/reset` | Re-seed demo data on demand |
 | `GET` | `/test-report` | Serves `testcases/test_report.html` |
-| `GET` | `/flow` | Last 5 lines of `/logs/flow.log` — proves the JWT/RBAC flow live |
+| `GET` | `/flow` | Last 5 lines of `/logs/flow.log` — proves the JWT/RBAC/ticket/SLA flow live |

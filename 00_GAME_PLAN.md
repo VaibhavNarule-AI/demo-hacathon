@@ -1,7 +1,7 @@
 # Game Plan
 
-**Use case:** SOC Executive Dashboard (HACK-SOC-01) — multi-tenant MSSP single-pane
-executive dashboard over SecurityHub incident data.
+**Use case:** PulseSOC — SOC Executive Command Center (HACK-SOC-01) — multi-tenant MSSP single-pane
+executive dashboard over PulseSOC incident data.
 **Time budget:** 4–5 hours, single build session.
 
 ## Judging weights (assumed)
