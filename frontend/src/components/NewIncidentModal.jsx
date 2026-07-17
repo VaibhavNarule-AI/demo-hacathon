@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const SEVERITIES = ["Critical", "Major", "Minor", "Informational"];
 const SIEMS = ["QRADAR", "XSIAM"];
@@ -35,7 +36,7 @@ export default function NewIncidentModal({ customers, onClose, onCreated }) {
       const res = await api.post("/incidents/create", form);
       onCreated(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || "Could not create incident.");
+      setError(errorMessage(err, "Could not create incident."));
     } finally {
       setSubmitting(false);
     }

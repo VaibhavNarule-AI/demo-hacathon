@@ -40,6 +40,8 @@ from app.repositories.incident_repository import (
     next_ticket_number,
     snooze_incident_row,
 )
+from app.services.priority_score import compute_priority_scores
+from app.services.workload_balancer import compute_workload
 from app.repositories.notification_repository import (
     fetch_audit_logs,
     fetch_email_outbox,
@@ -62,11 +64,10 @@ from app.repositories.sla_config_repository import (
 )
 from app.repositories.user_repository import fetch_all_users
 from app.services import auth_service
-from app.services.analytics_service import RangeTooLargeError, compute_kpis, compute_mitre_heatmap, compute_trends, resolve_range
+from app.services.analytics_service import RangeTooLargeError, compute_kpis, compute_trends, resolve_range
 from app.services.auto_action import auto_action_loop
 from app.services.breach_predictor import compute_breach_risk
 from app.services.email_mock import send_email_mock
-from app.services.health_score import compute_customer_health
 from app.services.teams_mock import send_teams_mock
 
 app = FastAPI(title="PulseSOC — SOC Executive Command Center API", version="2.0.0")
@@ -159,12 +160,65 @@ def list_incidents(
     return fetch_incidents(filters, tenant_filter)
 
 
+@app.get("/api/incidents/live")
+def incidents_live(since: str, current_user: CurrentUser = Depends(get_current_user)):
+    """Incidents created after `since` (ISO), for the LiveTicker's 10s poll."""
+    tenant_filter = get_tenant_filter(current_user)
+    filters = {"date_from": since, "date_to": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+    return fetch_incidents(filters, tenant_filter, limit=20)
+
+
+@app.get("/api/incidents/drill-down")
+def incidents_drill_down(
+    customer: Optional[str] = None,
+    siem: Optional[str] = None,
+    soar: Optional[str] = None,
+    tier: Optional[str] = None,
+    from_: Optional[str] = Query(None, alias="from"),
+    to: Optional[str] = None,
+    partner: Optional[str] = None,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Same shape as /api/incidents -- named separately per the Incidents page
+    spec, which treats drill-down as its own contract even though today it's
+    the same tenant-scoped query. Rows also carry priority_score/priority_label
+    /recommended_action/priority_reasons when the incident is open (Smart
+    Incident Priority Score), merged in-process so the table needs one
+    request, not two."""
+    tenant_filter = get_tenant_filter(current_user)
+    filters = _query_filters(customer, siem, soar, tier, from_, to, partner)
+    date_from, date_to = resolve_range(filters)
+    filters["date_from"], filters["date_to"] = date_from.isoformat(), date_to.isoformat()
+    rows = fetch_incidents(filters, tenant_filter, limit=500)
+
+    priority_by_id = {p["incident_id"]: p for p in compute_priority_scores(tenant_filter)}
+    for row in rows:
+        p = priority_by_id.get(row["id"])
+        row["priority_score"] = p["priority_score"] if p else None
+        row["priority_label"] = p["priority_label"] if p else None
+        row["recommended_action"] = p["recommended_action"] if p else None
+        row["priority_reasons"] = p["reasons"] if p else []
+    return rows
+
+
+# NOTE: this generic /{incident_id} route MUST be registered after the
+# literal /live and /drill-down routes above -- Starlette matches GET routes
+# in registration order, so if this came first, "live"/"drill-down" would be
+# captured as {incident_id} and fail int-parsing with a 422 (this is exactly
+# what broke the Dashboard/Incidents pages: every load hit /drill-down first).
 @app.get("/api/incidents/{incident_id}")
 def incident_detail(incident_id: int, current_user: CurrentUser = Depends(get_current_user)):
     tenant_filter = get_tenant_filter(current_user)
     row = get_incident_by_id(incident_id, tenant_filter)
     if row is None:
         raise HTTPException(status_code=404, detail="Incident not found or out of scope")
+    priority = next(
+        (p for p in compute_priority_scores(tenant_filter) if p["incident_id"] == incident_id), None
+    )
+    row["priority_score"] = priority["priority_score"] if priority else None
+    row["priority_label"] = priority["priority_label"] if priority else None
+    row["recommended_action"] = priority["recommended_action"] if priority else None
+    row["priority_reasons"] = priority["reasons"] if priority else []
     return row
 
 
@@ -366,56 +420,35 @@ def analytics_breach_risk(current_user: CurrentUser = Depends(get_current_user))
     return risk
 
 
-@app.get("/api/analytics/customer-health")
-def analytics_customer_health(current_user: CurrentUser = Depends(get_current_user)):
-    tenant_filter = get_tenant_filter(current_user)
-    insert_audit_log(current_user.email, "analytics.customer-health", tenant_filter, None)
-    return compute_customer_health(tenant_filter)
-
-
-@app.get("/api/analytics/mitre-heatmap")
-def analytics_mitre_heatmap(
-    customer: Optional[str] = None,
-    siem: Optional[str] = None,
-    soar: Optional[str] = None,
-    tier: Optional[str] = None,
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
-    partner: Optional[str] = None,
+@app.get("/api/analytics/priority-ranking")
+def analytics_priority_ranking(
+    limit: Optional[int] = None,
     current_user: CurrentUser = Depends(get_current_user),
 ):
+    """Smart Incident Priority Score -- every open incident ranked 0-100 on
+    severity + SLA urgency + customer tier + age + repeat-incident pattern,
+    not severity alone. `limit` lets the Dashboard's summary widget ask for
+    just the top few without the Incidents table's full ranked list."""
     tenant_filter = get_tenant_filter(current_user)
-    filters = _query_filters(customer, siem, soar, tier, from_, to, partner)
-    return compute_mitre_heatmap(filters, tenant_filter)
+    ranking = compute_priority_scores(tenant_filter)
+    critical = [r for r in ranking if r["priority_label"] == "Critical Priority"]
+    if critical:
+        tickets = ", ".join(r["ticket_number"] for r in critical)
+        write_flow_log(f"priority-ranking: {len(critical)} Critical Priority incident(s) ({tickets})")
+    return ranking[:limit] if limit else ranking
 
 
-@app.get("/api/incidents/live")
-def incidents_live(since: str, current_user: CurrentUser = Depends(get_current_user)):
-    """Incidents created after `since` (ISO), for the LiveTicker's 10s poll."""
+@app.get("/api/analytics/workload")
+def analytics_workload(current_user: CurrentUser = Depends(get_current_user)):
+    """Analyst Workload Balancer -- open/critical/pending ticket counts and
+    avg MTTR per analyst, plus a move-N-tickets recommendation from any
+    Overloaded analyst to the most-Available one, tenant-scoped like every
+    other analytics endpoint."""
     tenant_filter = get_tenant_filter(current_user)
-    filters = {"date_from": since, "date_to": datetime.datetime.now(datetime.timezone.utc).isoformat()}
-    return fetch_incidents(filters, tenant_filter, limit=20)
-
-
-@app.get("/api/incidents/drill-down")
-def incidents_drill_down(
-    customer: Optional[str] = None,
-    siem: Optional[str] = None,
-    soar: Optional[str] = None,
-    tier: Optional[str] = None,
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
-    partner: Optional[str] = None,
-    current_user: CurrentUser = Depends(get_current_user),
-):
-    """Same shape as /api/incidents -- named separately per the Incidents page
-    spec, which treats drill-down as its own contract even though today it's
-    the same tenant-scoped query."""
-    tenant_filter = get_tenant_filter(current_user)
-    filters = _query_filters(customer, siem, soar, tier, from_, to, partner)
-    date_from, date_to = resolve_range(filters)
-    filters["date_from"], filters["date_to"] = date_from.isoformat(), date_to.isoformat()
-    return fetch_incidents(filters, tenant_filter, limit=500)
+    workload = compute_workload(tenant_filter)
+    if workload["recommendations"]:
+        insert_audit_log(current_user.email, "analytics.workload", tenant_filter, None)
+    return workload
 
 
 # ---------------------------------------------------------------------------

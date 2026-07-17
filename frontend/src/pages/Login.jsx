@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const DEMO_USERS = [
   { user: "superadmin@pulsesoc.local", pass: "Admin@123", role: "super_admin", scope: "all partners" },
@@ -36,7 +37,7 @@ export default function Login() {
       console.log("Step 3: token stored, redirecting to dashboard");
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(errorMessage(err, "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -78,18 +79,22 @@ export default function Login() {
           </button>
         </form>
         <div className="demo-creds">
-          Demo accounts (password shown for the judges only)
-          <table>
-            <tbody>
-              {DEMO_USERS.map((u) => (
-                <tr key={u.user}>
-                  <td className="mono">{u.user}</td>
-                  <td className="mono">{u.pass}</td>
-                  <td>{u.scope}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="demo-creds-title">Demo accounts (password shown for the judges only)</p>
+          {DEMO_USERS.map((u) => (
+            <button
+              type="button"
+              key={u.user}
+              className="demo-account-row"
+              onClick={() => {
+                setEmail(u.user);
+                setPassword(u.pass);
+              }}
+            >
+              <span className="demo-account-email mono">{u.user}</span>
+              <span className="demo-account-pass mono">{u.pass}</span>
+              <span className="demo-account-scope">{u.scope}</span>
+            </button>
+          ))}
         </div>
       </div>
     </div>

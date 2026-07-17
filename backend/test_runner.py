@@ -270,46 +270,6 @@ record(
     match is not None and match["sla_target_minutes"] == expected_target and match["elapsed_mins"] < 2,
 )
 
-# TC-12 -------------------------------------------------------------------
-now = datetime.datetime.now(datetime.timezone.utc)
-since = (now - datetime.timedelta(days=30)).isoformat()
-this_week_start = (now - datetime.timedelta(days=7)).isoformat()
-last_week_start = (now - datetime.timedelta(days=14)).isoformat()
-row = raw_db_query(
-    "SELECT COUNT(*) alerts, SUM(sla_result='Breached') breaches, SUM(false_positive) fp "
-    "FROM incidents WHERE customer='customer-1' AND created_time BETWEEN ? AND ?",
-    (since, now.isoformat()),
-)
-alerts_n, breaches_n, fp_n = row["alerts"] or 0, row["breaches"] or 0, row["fp"] or 0
-fp_rate = (fp_n / alerts_n * 100) if alerts_n else 0
-mttr_row = raw_db_query(
-    "SELECT AVG((julianday(closed_time) - julianday(opened_time)) * 24) m FROM incidents "
-    "WHERE customer='customer-1' AND opened_time IS NOT NULL AND closed_time IS NOT NULL "
-    "AND created_time BETWEEN ? AND ?",
-    (since, now.isoformat()),
-)
-avg_mttr = mttr_row["m"] or 0
-this_week_row = raw_db_query(
-    "SELECT COUNT(*) c FROM incidents WHERE customer='customer-1' AND created_time >= ?", (this_week_start,)
-)
-last_week_row = raw_db_query(
-    "SELECT COUNT(*) c FROM incidents WHERE customer='customer-1' AND created_time >= ? AND created_time < ?",
-    (last_week_start, this_week_start),
-)
-this_week_n, last_week_n = this_week_row["c"] or 0, last_week_row["c"] or 0
-volume_spike = (this_week_n - last_week_n) / last_week_n if last_week_n > 0 else (1.0 if this_week_n > 0 else 0.0)
-expected_health = max(
-    0, min(100, round(100 - breaches_n * 12 - fp_rate * 0.6 - avg_mttr * 1.5 - max(0.0, volume_spike) * 10, 1))
-)
-health_res = client.get("/api/analytics/customer-health", headers={"Authorization": f"Bearer {sa_token}"})
-health_match = next((r for r in health_res.json() if r["customer_id"] == "customer-1"), None)
-record(
-    "TC-12", "Customer Health Score calc: 100 - breaches*12 - fp_rate*0.6 - avg_mttr_h*1.5 - max(0,volume_spike)*10, clamped 0-100",
-    "This is the number an account manager reads out in a QBR -- it has to match a from-scratch recomputation off the raw 30-day incident data (including the week-over-week volume-spike term), not just agree with itself.",
-    str(expected_health), str(health_match["health_score"] if health_match else None),
-    health_match is not None and abs(health_match["health_score"] - expected_health) < 0.2,
-)
-
 # TC-13 -------------------------------------------------------------------
 before_alerts = client.get("/api/analytics/kpis", headers={"Authorization": f"Bearer {sa_token}"}).json()["alerts"]["value"]
 create_res2 = create_test_incident("customer-1", "Minor", "TC-13 live creation check")
@@ -406,19 +366,6 @@ record(
     create_res5.status_code == 201 and email_match is not None and email_match["status"] == "Sent",
 )
 
-# TC-19 -------------------------------------------------------------------
-heatmap_res = client.get(
-    "/api/analytics/mitre-heatmap", params={"from": frm, "to": to}, headers={"Authorization": f"Bearer {sa_token}"}
-)
-heatmap = heatmap_res.json() if heatmap_res.status_code == 200 else []
-record(
-    "TC-19", "MITRE ATT&CK heatmap returns non-empty technique counts for the Threat Landscape page",
-    "The heatmap is only useful if it reflects real technique tags on real incidents in range -- an empty or malformed response would leave the page blank.",
-    "non-empty list of {technique, count} with count > 0",
-    f"{len(heatmap)} techniques, e.g. {heatmap[:2]}",
-    heatmap_res.status_code == 200 and len(heatmap) > 0 and all(h["count"] > 0 for h in heatmap),
-)
-
 # TC-20 -------------------------------------------------------------------
 flow_denied = client.get("/api/admin/flow-log", headers={"Authorization": f"Bearer {cv_token}"})
 flow_allowed = client.get("/api/admin/flow-log", headers={"Authorization": f"Bearer {sa_token}"})
@@ -428,6 +375,87 @@ record(
     "customer_viewer -> 403, super_admin -> 200",
     f"customer_viewer -> {flow_denied.status_code}, super_admin -> {flow_allowed.status_code}",
     flow_denied.status_code == 403 and flow_allowed.status_code == 200,
+)
+
+# TC-21 -------------------------------------------------------------------
+tier_row = raw_db_query("SELECT service_tier FROM customers WHERE customer_id = 'customer-1'")
+TIER_SCORE = {"Gold": 100, "Silver": 60, "Bronze": 30}
+expected_tier_score = TIER_SCORE[tier_row["service_tier"]]
+
+tc21_create = create_test_incident("customer-1", "Critical", "TC-21 priority score check")
+tc21_id = tc21_create.json()["id"] if tc21_create.status_code == 201 else None
+ranking = client.get(
+    "/api/analytics/priority-ranking", headers={"Authorization": f"Bearer {sa_token}"}
+).json()
+tc21_match = next((r for r in ranking if r["incident_id"] == tc21_id), None)
+
+if tc21_match:
+    f = tc21_match["factors"]
+    recomputed_score = round(
+        f["severity"] * 0.40 + f["sla_urgency"] * 0.25 + f["customer_tier"] * 0.15
+        + f["incident_age"] * 0.10 + f["repeat_incident"] * 0.10
+    )
+else:
+    recomputed_score = None
+
+record(
+    "TC-21",
+    "Smart Priority Score: weighted formula (severity*0.4 + sla*0.25 + tier*0.15 + age*0.1 + repeat*0.1) matches its own reported factors, for a freshly-opened Critical ticket",
+    "The whole pitch of this feature is that the 0-100 score is a real weighted aggregate an analyst can trust, not a black box -- recomputing it from the same factors the API returns has to land on the same number, and a brand-new Critical ticket must score severity=100 and near-zero elapsed/age.",
+    f"factors present, severity=100, tier_score={expected_tier_score}, composite == recomputed_score",
+    f"{tc21_match['factors'] if tc21_match else None} -> composite={tc21_match['priority_score'] if tc21_match else None}, recomputed={recomputed_score}",
+    tc21_match is not None
+    and tc21_match["factors"]["severity"] == 100
+    and tc21_match["factors"]["customer_tier"] == expected_tier_score
+    and tc21_match["factors"]["sla_urgency"] <= 5
+    and tc21_match["factors"]["incident_age"] <= 5
+    and tc21_match["priority_score"] == recomputed_score,
+)
+
+# TC-22 -------------------------------------------------------------------
+OVERLOAD_ANALYST = "TC22-Analyst-Overloaded"
+
+
+def create_analyst_incident(analyst, i):
+    return client.post(
+        "/api/incidents/create",
+        json={
+            "customer": "customer-1", "severity": "Minor", "category": "Malware",
+            "summary": f"TC-22 workload seed {i}", "siem": "QRADAR", "soar": "XSOAR",
+            "assigned_analyst": analyst,
+        },
+        headers={"Authorization": f"Bearer {sa_token}"},
+    )
+
+
+for _i in range(31):
+    create_analyst_incident(OVERLOAD_ANALYST, _i)
+
+workload = client.get(
+    "/api/analytics/workload", headers={"Authorization": f"Bearer {sa_token}"}
+).json()
+overloaded_entry = next((a for a in workload["analysts"] if a["analyst"] == OVERLOAD_ANALYST), None)
+rec = next((r for r in workload["recommendations"] if r["from_analyst"] == OVERLOAD_ANALYST), None)
+
+if overloaded_entry and rec:
+    before_ratio = overloaded_entry["open_tickets"] / overloaded_entry["capacity"]
+    after_ratio = (overloaded_entry["open_tickets"] - rec["move_count"]) / overloaded_entry["capacity"]
+    expected_improvement = round((before_ratio - after_ratio) / before_ratio * 50)
+else:
+    expected_improvement = None
+
+record(
+    "TC-22",
+    "Analyst Workload Balancer: 31 open tickets on one analyst trips Overloaded status and produces a move-N-tickets recommendation with a correctly-computed SLA-improvement estimate",
+    "The balancer's entire value is catching an uneven queue before it causes a breach -- pushing one analyst to 31 open tickets (over the 30-ticket Overloaded threshold) must both flag them and recommend a real rebalance, not just report the raw count.",
+    "status=Overloaded, recommendation present, estimated_sla_improvement_pct == recomputed value",
+    f"{overloaded_entry}, rec={rec}, recomputed_improvement={expected_improvement}",
+    overloaded_entry is not None
+    and overloaded_entry["status"] == "Overloaded"
+    and overloaded_entry["open_tickets"] >= 31
+    and rec is not None
+    and rec["move_count"] > 0
+    and rec["estimated_sla_improvement_pct"] == expected_improvement,
 )
 
 
@@ -492,35 +520,29 @@ def write_log(path):
 
 
 def push_to_kiwi(path):
-    import base64
-    import json
-    import urllib.request
+    """Real XML-RPC push (see app.services.kiwi_client) -- creates/updates the
+    actual PulseSOC product/plan/cases in Kiwi and records one TestExecution
+    per result. Never blocks the run: any failure (Kiwi unreachable, creds
+    missing) is logged here and the local testcases/ output stands on its
+    own, per the qe-guardian Kiwi-availability rule in CLAUDE.md."""
+    from app.services.kiwi_client import push_results_to_kiwi
 
     path.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    kiwi_url = os.environ.get("KIWI_TCMS_URL")
-    kiwi_user = os.environ.get("KIWI_TCMS_USERNAME")
-    kiwi_pass = os.environ.get("KIWI_TCMS_PASSWORD")
 
-    if not kiwi_url:
+    if not os.environ.get("KIWI_TCMS_URL"):
         with path.open("a") as f:
             f.write(f"[{timestamp}] Kiwi TCMS not configured -- results available in testcases/ only.\n")
         return
 
-    passed = sum(1 for r in results if r["status"] == "PASS")
     try:
-        req = urllib.request.Request(
-            kiwi_url.rstrip("/") + "/xml-rpc/",
-            data=json.dumps({"summary": f"PulseSOC run: {passed}/{len(results)} passed"}).encode(),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": "Basic "
-                + base64.b64encode(f"{kiwi_user}:{kiwi_pass}".encode()).decode(),
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            with path.open("a") as f:
-                f.write(f"[{timestamp}] Pushed {passed}/{len(results)} results to {kiwi_url} -- HTTP {resp.status}\n")
+        outcome = push_results_to_kiwi(results)
+        with path.open("a") as f:
+            f.write(
+                f"[{timestamp}] Synced {outcome['cases_synced']} cases, "
+                f"{outcome['passed']}/{outcome['total']} passed, to Kiwi run "
+                f"{outcome['run_id']} -- {outcome['run_url']}\n"
+            )
     except Exception as exc:
         with path.open("a") as f:
             f.write(f"[{timestamp}] Kiwi TCMS push failed ({exc}) -- results remain available in testcases/ only.\n")

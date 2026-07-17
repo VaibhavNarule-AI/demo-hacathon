@@ -2,9 +2,8 @@
 
 A single-pane, multi-tenant executive dashboard for an MSSP SOC — global filters,
 9 KPI cards with week-over-week deltas and sparklines, incident drill-down, and
-four signature features (SLA Breach Predictor with live blinking/snooze/auto-escalation,
-Customer Health Score with anomaly detection, MITRE ATT&CK Threat Landscape, and
-Partner Registration + SLA Configuration), all scoped server-side by role
+two signature features (SLA Breach Predictor with live blinking/snooze/auto-escalation,
+and Partner Registration + SLA Configuration), all scoped server-side by role
 (super_admin, partner_manager, customer_viewer, analyst). Built against
 `docs/SOC_Executive_Dashboard_Problem_Final.docx` (HACK-SOC-01).
 
@@ -21,14 +20,12 @@ Framework rules (logging, git flow, JWT/RBAC spec) are in [`CLAUDE.md`](CLAUDE.m
 ## Layout
 
 An enterprise sidebar shell (`Layout.jsx`, 260px fixed dark sidebar + 60px top bar
-with the global filter/theme/timezone/bell/Command Center controls), 8 routed pages:
+with the global filter/theme/timezone/bell/Command Center controls), 6 routed pages:
 
 | Page | Route | What it shows |
 |---|---|---|
-| Dashboard | `/` | Charts only — Alerts Trend, Severity Breakdown, Top Customers, SIEM vs SOAR, Customer Health + Breach Predictor summary widgets. Every chart is clickable and drills into a filtered Incidents view. |
+| Dashboard | `/` | Charts only — Alerts Trend, Severity Breakdown, Top Customers, SIEM vs SOAR, Breach Predictor summary widget. Every chart is clickable and drills into a filtered Incidents view. |
 | SLA Breach Predictor | `/breach-predictor` | War Room banner, Early Warning table, Breach Risk by Customer chart. |
-| Customer Health | `/customer-health` | QBR-ready health cards, anomaly banner, SLA compliance trend. |
-| Threat Landscape | `/threat-landscape` | MITRE ATT&CK heatmap (real seeded techniques grouped by tactic) + Top Techniques chart. |
 | Partner Management | `/partners` | Register Partner, Configure SLA, Demo Setup wizard. |
 | Notifications | `/notifications` | Email Outbox, Teams Outbox, Bell History — file-backed proof of every mock send. |
 | Incidents | `/incidents` | Full drill-down table: filters, chips, search, sort, pagination, row modal with Details/Timeline/Email/Teams tabs and Resolve/Snooze/Send Email actions. |
@@ -42,11 +39,6 @@ with the global filter/theme/timezone/bell/Command Center controls), 8 routed pa
   Snoozing suppresses blinking until the snooze expires; an `asyncio` background
   loop (`auto_action.py`, checking every 60s — no Celery) auto-escalates breached
   tickets and opens a `FOLLOWUP-*` ticket if a breach goes unresolved for 10+ minutes.
-- **Customer Health Score** — `100 − breaches×12 − fp_rate×0.6 − avg_mttr_h×1.5 −
-  max(0,volume_spike)×10`, clamped 0–100, over a 30-day window. `volume_spike` is
-  this-week vs last-week ticket count, flagged as an anomaly above 0.5.
-- **Threat Landscape** — MITRE ATT&CK technique tags on every incident, grouped by
-  real tactic (Initial Access, Execution, Credential Access, …) into a heatmap.
 - **Partner Registration + SLA Configuration** — register a partner (auto-provisions
   a mock Teams webhook URL), onboard a customer, set a per-severity SLA override,
   all through the UI — or the `Demo Setup` wizard, which does all four steps in
@@ -61,12 +53,12 @@ with the global filter/theme/timezone/bell/Command Center controls), 8 routed pa
 ```mermaid
 flowchart LR
     subgraph Client["Browser (React SPA, zero third-party)"]
-        UI["Sidebar shell + 8 pages<br/>Canvas 2D charts, native Intl tz"]
+        UI["Sidebar shell + 6 pages<br/>Canvas 2D charts, native Intl tz"]
     end
     subgraph App["One FastAPI process — logical services"]
         AUTH["/api/auth (JWT, email identity)"]
         INC["/api/incidents (create/close/snooze/drill-down)"]
-        ANA["/api/analytics (KPIs, breach-risk, health, mitre-heatmap)"]
+        ANA["/api/analytics (KPIs, trends, breach-risk)"]
         PART["/api/partners, /api/sla-config"]
         NOTIF["/api/notifications (email/teams outbox, bell)"]
         ADMIN["/api/admin (users, audit-logs, flow-log)"]
@@ -97,7 +89,7 @@ flowchart LR
 ### Local (no Docker)
 ```bash
 pip install -r backend/requirements.txt
-python backend/seed.py                 # 5,000 incidents, 20 customers, 4 users
+python backend/seed.py                 # 2,000 incidents, 5 customers, 4 users
 cd frontend && npm install && npm run build && cd ..
 cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -138,7 +130,7 @@ judges — no pre-baked data:
    in `/tmp/emails` / `/tmp/teams` (visible live on the `/notifications` page)
 
 Then open the ticket from `/incidents` and hit **Resolve**: toast "SLA saved with
-N min left!", confetti, and the KPI cards / health score refresh live, no reload.
+N min left!", confetti, and the KPI cards refresh live, no reload.
 Every step is logged to `logs/flow.log` (viewable live on `/admin`).
 
 ## Proof endpoints
@@ -172,22 +164,21 @@ Every step is logged to `logs/flow.log` (viewable live on `/admin`).
 
 ## Sample data
 
-`backend/seed.py` generates 90 days of data (relative to whenever it's run, not
-fixed dates) with a volume spike in the last 14 days and realistic ops hygiene —
-closure likelihood scales with age, and Critical incidents mostly resolve inside
-their SLA — so the breach predictor and health score both show a genuine spread
-instead of everything pinned at one extreme. Exports the first 200 rows to
-[`docs/incident_sample.csv`](docs/incident_sample.csv) for reference.
+`backend/seed.py` generates 90 days of data across 5 customers (relative to
+whenever it's run, not fixed dates) with a volume spike in the last 14 days and
+realistic ops hygiene — closure likelihood scales with age, and Critical
+incidents mostly resolve inside their SLA — so the breach predictor shows a
+genuine spread instead of everything pinned at one extreme. Exports the first
+200 rows to [`docs/incident_sample.csv`](docs/incident_sample.csv) for reference.
 
 ## Testing
 
-`backend/test_runner.py` runs 20 test cases in-process against the seeded database
+`backend/test_runner.py` runs 18 test cases in-process against the seeded database
 (no live server needed) — login, RBAC, tenant isolation, KPI math, breach-predictor
-math, customer-health-score math (including the volume-spike term), live ticket
-creation, SLA config overrides, blinking-critical detection, snooze suppression,
-the close-ticket SLA-saved flow, the zero-third-party email-outbox mock, the MITRE
-heatmap, and admin-only `flow.log` RBAC — all cross-checked directly against raw
-SQL. Results land in `testcases/TEST_CASE_TRACKER.csv`, `testcases/test_report.html`,
+math, live ticket creation, SLA config overrides, blinking-critical detection,
+snooze suppression, the close-ticket SLA-saved flow, the zero-third-party
+email-outbox mock, and admin-only `flow.log` RBAC — all cross-checked directly
+against raw SQL. Results land in `testcases/TEST_CASE_TRACKER.csv`, `testcases/test_report.html`,
 and `logs/test.log`, and get pushed to Kiwi TCMS (`testcases/kiwi_push.log` records
 the outcome either way).
 

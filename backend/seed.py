@@ -1,9 +1,11 @@
-"""Generates 90 days of demo SOC data: 5 partners, 20 customers, 5,000 incidents,
+"""Generates 90 days of demo SOC data: 5 partners, 5 customers, 2,000 incidents,
 and 4 login users. Run from the repo root: `python backend/seed.py`.
 
 Assumptions (documented alongside 02_SOLUTION_ARCHITECTURE_TEMPLATE.md):
-- Only partner-a and partner-b carry customers/incidents (10 customers each = 20
-  total) -- partner-c/d/e exist as valid partner IDs for RBAC scope testing only.
+- Only partner-a and partner-b carry customers/incidents (3 for partner-a, 2 for
+  partner-b = 5 total) -- partner-c/d/e exist as valid partner IDs for RBAC scope
+  testing only. Kept small on purpose so the breach predictor and per-customer
+  drilldowns stay easy to reason about by hand instead of scrolling a long list.
 - Incident volume spikes over the last 14 days (~40% of all incidents land there)
   so the weekly trend chart shows a visible recent uptick.
 - A false-positive incident never gets an opened_time, first_response_time, or
@@ -62,15 +64,18 @@ ANALYSTS = ["A. Rao", "K. Mehta", "S. Iyer", "J. Fernandes", "P. Shah", "R. Nair
 NOW = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
 WINDOW_DAYS = 90
 SPIKE_DAYS = 14
-TOTAL_INCIDENTS = 5000
+TOTAL_INCIDENTS = 2000
 FALSE_POSITIVE_RATE = 0.15
+CUSTOMERS_PER_PARTNER = {"partner-a": 3, "partner-b": 2}
 
 
 def build_customers():
     customers = []
-    for idx, partner in enumerate(PARTNERS_WITH_CUSTOMERS):
-        for n in range(1, 11):
-            customer_id = f"customer-{idx * 10 + n}"
+    next_id = 1
+    for partner in PARTNERS_WITH_CUSTOMERS:
+        for n in range(1, CUSTOMERS_PER_PARTNER[partner] + 1):
+            customer_id = f"customer-{next_id}"
+            next_id += 1
             customers.append({
                 "customer_id": customer_id,
                 "customer_name": f"{partner.title().replace('-', ' ')} Customer {n}",
@@ -189,7 +194,7 @@ def main():
     create_partner("Partner A", "partner-a", "ops@partner-a.example")
     create_partner("Partner B", "partner-b", "ops@partner-b.example")
 
-    print("Step 2: generating 20 customers across partner-a / partner-b")
+    print("Step 2: generating 5 customers across partner-a / partner-b")
     customers = build_customers()
     bulk_insert_customers([
         (c["customer_id"], c["customer_name"], c["partner_id"], c["service_tier"], c["siem"], c["soar"])

@@ -119,14 +119,12 @@
 
 <section>
   <p class="slide-label">Slide 3b — Enterprise Layout</p>
-  <h1>8 pages, one sidebar — not a single page with everything stacked</h1>
+  <h1>6 pages, one sidebar — not a single page with everything stacked</h1>
   <h2>Dashboard is charts-only; every chart click drills into a filtered Incidents view.</h2>
   <table>
     <tr><th>Page</th><th>What it's for</th></tr>
-    <tr><td>Dashboard</td><td>Charts only — Alerts Trend, Severity, Top Customers, SIEM vs SOAR, Health + Breach summary widgets</td></tr>
+    <tr><td>Dashboard</td><td>Charts only — Alerts Trend, Severity, Top Customers, SIEM vs SOAR, Breach summary widget</td></tr>
     <tr><td>SLA Breach Predictor</td><td>War Room banner, Early Warning table, Breach Risk by Customer chart</td></tr>
-    <tr><td>Customer Health</td><td>QBR cards, anomaly banner, SLA compliance trend</td></tr>
-    <tr><td>Threat Landscape</td><td>MITRE ATT&amp;CK heatmap by tactic + Top Techniques chart</td></tr>
     <tr><td>Partner Management</td><td>Register Partner, Configure SLA, Demo Setup wizard</td></tr>
     <tr><td>Notifications</td><td>Email Outbox, Teams Outbox, Bell History — file-backed proof</td></tr>
     <tr><td>Incidents</td><td>Full table, filters, chips, search/sort/pagination, drill-down modal</td></tr>
@@ -153,46 +151,6 @@
 
 <section>
   <p class="slide-label">Slide 5 — Killer Feature 2</p>
-  <h1>Customer Health Score — QBR ready</h1>
-  <h2>One number an account manager can read out loud in a quarterly business review.</h2>
-  <div class="mock-screen feature-grid">
-    <div class="feature-card">
-      <span class="mock-ring" style="background:var(--good-soft);color:var(--good);">92</span>
-      <strong>Partner A Customer 5</strong>
-      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">Healthy · No major issues</p>
-    </div>
-    <div class="feature-card">
-      <span class="mock-ring" style="background:var(--warn-soft);color:var(--warn);">63</span>
-      <strong>Partner B Customer 3</strong>
-      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">At Risk · MTTR 23.0h</p>
-    </div>
-    <div class="feature-card">
-      <span class="mock-ring" style="background:var(--bad-soft);color:var(--bad);">9</span>
-      <strong>Partner B Customer 1</strong>
-      <p style="color:var(--text-soft);font-size:0.82rem;margin:0.4rem 0 0;">Critical · 4 SLA breaches</p>
-    </div>
-  </div>
-  <ul class="tight" style="margin-top:1rem;">
-    <li><code>health = 100 − breaches×12 − fp_rate×0.6 − avg_mttr_h×1.5 − max(0,volume_spike)×10</code>, clamped 0–100, over a 30-day window</li>
-    <li><code>volume_spike</code> = this-week vs last-week ticket count — flags a customer having a bad week even before breaches pile up</li>
-    <li>Click any card → whole dashboard filters to that customer</li>
-    <li>Export PDF button — real browser print-to-PDF, no extra library</li>
-  </ul>
-</section>
-
-<section>
-  <p class="slide-label">Slide 5b — Killer Feature 4</p>
-  <h1>Threat Landscape — MITRE ATT&amp;CK, grouped by real tactic</h1>
-  <h2>Every incident carries 1-3 MITRE technique tags; the heatmap groups them by their actual ATT&amp;CK tactic, not a fixed grid of invented cells.</h2>
-  <ul class="tight">
-    <li>Initial Access, Execution, Credential Access, Lateral Movement, Command &amp; Control, Exfiltration — populated from real seeded technique tags</li>
-    <li>Heat intensity = technique frequency in the active filter range</li>
-    <li>Top Techniques bar chart ranks the same data for a quick executive read</li>
-  </ul>
-</section>
-
-<section>
-  <p class="slide-label">Slide 6 — Killer Feature 3</p>
   <h1>Live Command Center Mode</h1>
   <h2>Full-screen, dark, built for a war room — not a screenshot of one.</h2>
   <ul class="tight">
@@ -217,7 +175,7 @@
 </section>
 
 <section>
-  <p class="slide-label">Slide 7 — Live Demo (60 seconds)</p>
+  <p class="slide-label">Slide 6 — Live Demo (60 seconds)</p>
   <h1>Partner Registration → SLA Config → Ticket Blink → Close to Save SLA</h1>
   <h2>Zero seed data, zero pre-baked demo — built live, in front of the judges, via Demo Setup.</h2>
   <div class="wizard-flow">
@@ -232,18 +190,18 @@
     <li>Ticket appears blinking <strong>immediately</strong> — a 5-minute SLA means 5 minutes elapsed is already the whole budget</li>
     <li>War Room banner flashes red at the top of the screen with a live 1-second countdown; a real <code>.eml</code> + Teams JSON land in <code>/tmp/emails</code> / <code>/tmp/teams</code>, visible on the Notifications page</li>
     <li>Snooze it for 15 min → banner clears, ticket marked <code>SNOOZED</code>; wait it out and the 60s auto-escalation loop picks it back up on its own</li>
-    <li>Closing it before the buzzer: toast "SLA saved with N min left!" + confetti + KPI/health-score refresh, no reload</li>
+    <li>Closing it before the buzzer: toast "SLA saved with N min left!" + confetti + live KPI refresh, no reload</li>
     <li>Every step logged to <code>logs/flow.log</code> — partner registered, SLA configured, ticket created, SLA saved</li>
   </ul>
 </section>
 
 <section>
-  <p class="slide-label">Slide 8 — Proof &amp; Pitch</p>
+  <p class="slide-label">Slide 7 — Proof &amp; Pitch</p>
   <h1>Things you can check yourself, not things we're asking you to trust</h1>
   <table>
     <tr><th>Proof</th><th>Where</th></tr>
     <tr><td>Work happened</td><td><code>logs/</code> — one log per build stage, plus every live action (ticket create, SLA save, partner register, auto-escalation)</td></tr>
-    <tr><td>It's correct</td><td><code>testcases/test_report.html</code> — 20/20, including breach-predictor math, health-score formula (with volume-spike), snooze suppression, MITRE heatmap, and admin RBAC, all cross-checked against raw SQL</td></tr>
+    <tr><td>It's correct</td><td><code>testcases/test_report.html</code> — 18/18, including breach-predictor math, snooze suppression, and admin RBAC, all cross-checked against raw SQL</td></tr>
     <tr><td>Notifications actually sent</td><td>Real files on disk — <code>/tmp/emails/*.eml</code>, <code>/tmp/teams/*.json</code> — zero network calls, fully air-gapped</td></tr>
     <tr><td>Independently verified</td><td>Kiwi TCMS run — <code>dev.securityhub365.com/kiwi/runs/search/</code></td></tr>
     <tr><td>Actually delivered</td><td>GitHub commit history</td></tr>

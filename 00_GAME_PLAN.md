@@ -20,7 +20,7 @@ time on the 15% creativity bonus.
 | Time | Milestone | Owner |
 |---|---|---|
 | T+0:00 | Problem intake filled, architecture decided | solution-architect |
-| T+0:45 | DB schema + seed data generating 5,000 incidents | rapid-builder |
+| T+0:45 | DB schema + seed data generating 2,000 incidents | rapid-builder |
 | T+1:30 | Backend API complete — auth, incidents, analytics, customers | rapid-builder |
 | T+2:30 | Frontend complete — login, filter bar, KPI cards, trend charts, drill-down | rapid-builder |
 | T+3:00 | Review complete — bypass/tenant-isolation check | code-reviewer |

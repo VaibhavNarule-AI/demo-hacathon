@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 export default function CloseIncidentModal({ ticket, onClose, onClosed }) {
   const [notes, setNotes] = useState("");
@@ -14,7 +15,7 @@ export default function CloseIncidentModal({ ticket, onClose, onClosed }) {
       const res = await api.post(`/incidents/${ticket.incident_id}/close`, { resolution_notes: notes });
       onClosed(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || "Could not close incident.");
+      setError(errorMessage(err, "Could not close incident."));
     } finally {
       setSubmitting(false);
     }

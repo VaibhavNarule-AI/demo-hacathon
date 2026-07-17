@@ -5,6 +5,7 @@ import GlobalFilterBar from "../components/GlobalFilterBar";
 import KPICards, { KPICardsSkeleton } from "../components/KPICards";
 import { useApp } from "../context/AppContext";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const SEVERITY_COLORS = { Critical: "#f87171", Major: "#fbbf24", Minor: "#3aa0ff", Informational: "#34d399" };
 
@@ -43,7 +44,7 @@ export default function Dashboard() {
   const [dailyTrend, setDailyTrend] = useState([]);
   const [mttrTrend, setMttrTrend] = useState([]);
   const [incidents, setIncidents] = useState([]);
-  const [health, setHealth] = useState([]);
+  const [topPriority, setTopPriority] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -58,18 +59,18 @@ export default function Dashboard() {
       api.get("/analytics/trends", { params: { ...last30DaysParams(filters), metric: "volume", bucket: "daily" } }),
       api.get("/analytics/trends", { params: { ...params, metric: "mttr" } }),
       api.get("/incidents/drill-down", { params }),
-      api.get("/analytics/customer-health"),
+      api.get("/analytics/priority-ranking", { params: { limit: 1 } }),
     ])
-      .then(([kpiRes, trendRes, mttrRes, incRes, healthRes]) => {
+      .then(([kpiRes, trendRes, mttrRes, incRes, priorityRes]) => {
         if (cancelled) return;
         setKpis(kpiRes.data);
         setDailyTrend(trendRes.data);
         setMttrTrend(mttrRes.data);
         setIncidents(incRes.data);
-        setHealth(healthRes.data);
+        setTopPriority(priorityRes.data);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.response?.data?.detail || "Failed to load dashboard.");
+        if (!cancelled) setError(errorMessage(err, "Failed to load dashboard."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -112,8 +113,6 @@ export default function Dashboard() {
   });
   const siemSoarData = Object.values(siemSoarMap);
 
-  const healthyCount = health.filter((h) => h.status === "Healthy").length;
-  const atRiskCount = health.length - healthyCount;
   const highRisk = breachRisk.filter((r) => r.risk === "HIGH" || r.risk === "BLINKING");
 
   function goIncidents(extraParams) {
@@ -189,17 +188,6 @@ export default function Dashboard() {
       <div className="dashboard-summary-row">
         <div className="table-card summary-card">
           <div className="summary-header">
-            <h3>Customer Health</h3>
-            <a href="/customer-health" className="btn-link">View All →</a>
-          </div>
-          <div className="summary-stats">
-            <span className="badge Matched">{healthyCount} Healthy</span>
-            <span className="badge Breached">{atRiskCount} At Risk / Critical</span>
-          </div>
-        </div>
-
-        <div className="table-card summary-card">
-          <div className="summary-header">
             <h3>SLA Breach Predictor</h3>
             <a href="/breach-predictor" className="btn-link">View All →</a>
           </div>
@@ -209,6 +197,29 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="empty-state" style={{ padding: "1rem 0" }}>All clear — nothing at risk right now.</div>
+          )}
+        </div>
+
+        <div className="table-card summary-card">
+          <div className="summary-header">
+            <h3>Smart Priority — Top Incident</h3>
+            <a href="/incidents" className="btn-link">View All →</a>
+          </div>
+          {topPriority.length > 0 ? (
+            <div className="priority-summary">
+              <div className="priority-summary-top">
+                <span className="mono priority-summary-ticket">{topPriority[0].ticket_number}</span>
+                <span className={`priority-badge priority-${topPriority[0].priority_label.split(" ")[0].toLowerCase()}`}>
+                  {topPriority[0].priority_score} / 100
+                </span>
+              </div>
+              <p className="priority-summary-reason">{topPriority[0].reasons.join(" · ")}</p>
+              <p className="priority-summary-action">
+                Recommended Action: <strong>{topPriority[0].recommended_action}</strong>
+              </p>
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: "1rem 0" }}>No open incidents to prioritize right now.</div>
           )}
         </div>
       </div>

@@ -5,7 +5,7 @@ _Filled by `solution-architect`. Every decision needs a WHY, not just a what._
 ## Stack
 | Layer | Choice | WHY |
 |---|---|---|
-| Backend | FastAPI (single process, logically many services) | Async request handling matters here — the analytics endpoint aggregates over up to 90 days / 5,000 rows on every filter change, and FastAPI's async I/O keeps that from blocking other tenants' requests. The same async runtime hosts a background `asyncio.create_task` loop (`auto_action_loop`, 60s interval) for breach auto-escalation — no Celery/task-queue dependency needed. One process is a deliberate build decision, not an architecture ceiling — see below. |
+| Backend | FastAPI (single process, logically many services) | Async request handling matters here — the analytics endpoint aggregates over up to 90 days / 2,000 rows on every filter change, and FastAPI's async I/O keeps that from blocking other tenants' requests. The same async runtime hosts a background `asyncio.create_task` loop (`auto_action_loop`, 60s interval) for breach auto-escalation — no Celery/task-queue dependency needed. One process is a deliberate build decision, not an architecture ceiling — see below. |
 | Database | SQLite, file-based (`/data/app.db`) | One file, trivial to seed/reset/back up for a demo, zero infra to stand up. All timestamps stored as UTC ISO8601; the frontend converts to the viewer's chosen timezone (IST/UTC/EST/GMT) for display only — filtering always happens in UTC server-side. `DB_TYPE` env toggle (`sqlite` default, `mongo` stubbed) documents the migration path without spending build time on it. |
 | Frontend | React + Vite — **zero third-party runtime dependencies** | No dayjs/moment (native `Intl.DateTimeFormat.formatToParts()` instead), no chart library (hand-rolled Canvas 2D `ChartCard.jsx` — line/bar/stacked-bar/donut, with click-region hit-testing so every chart drills into a filtered view), no email/Teams SDK (mocked to local files, see Notifications below). Fully offline/air-gapped: no CDN fonts, no external calls. React Router v6 for the 8-page sidebar SPA (`Layout.jsx` + `AppContext.jsx`). |
 | Auth | JWT (8h expiry, bcrypt, email identity) | Stateless — no server-side session store needed, which matters because tenant scope (`partner_id`/`customer_id`) travels inside the token claims and is re-checked on every request. 8h matches a SOC analyst's shift length (deliberately longer than the factory template's generic 1h default, since a shift-long token is the right fit for this specific use case). Identity is `email`, not `username` — every `users` row and JWT payload key is `email`. |
@@ -47,12 +47,12 @@ journey
 ```mermaid
 flowchart LR
     subgraph Client["Browser -- React SPA, zero third-party"]
-        UI["Sidebar shell (Layout.jsx) + 8 pages\nCanvas 2D ChartCard, native Intl tz"]
+        UI["Sidebar shell (Layout.jsx) + 6 pages\nCanvas 2D ChartCard, native Intl tz"]
     end
     subgraph App["One FastAPI process -- logical services"]
         AUTH["/api/auth\nJWT issue+verify, email identity"]
         INC["/api/incidents\ncreate/close/snooze/drill-down/live"]
-        ANA["/api/analytics\nKPIs, breach-risk, health, mitre-heatmap"]
+        ANA["/api/analytics\nKPIs, trends, breach-risk"]
         CUST["/api/customers"]
         PART["/api/partners, /api/sla-config"]
         NOTIF["/api/notifications\nemail/teams outbox, bell history"]
@@ -306,27 +306,6 @@ risk =
 Snoozing sets `blinking_critical = False` and `risk = SNOOZED` until the snooze
 window passes, at which point the 60s background loop (above) picks it back up.
 
-## Customer Health Score — formula (`health_score.py`)
-
-One QBR-ready number per customer, 30-day window:
-
-```
-fp_rate      = false_positive_count / alerts * 100
-volume_spike = (this_week_count - last_week_count) / last_week_count
-               (1.0 if this_week_count>0 and last_week_count==0, else 0.0)
-
-health = 100 - breaches*12 - fp_rate*0.6 - avg_mttr_h*1.5 - max(0, volume_spike)*10
-health = clamp(health, 0, 100)
-
-status = Healthy (health>80) | At Risk (50<=health<=80) | Critical (health<50)
-anomaly = volume_spike > 0.5
-```
-
-The `volume_spike` term is what the older KPI-only view missed: two customers can
-have identical breach/FP/MTTR numbers but one just had a 3x ticket-volume week —
-that's a real health signal an account manager needs surfaced before the QBR, not
-just a coincidence buried in the raw count.
-
 ## API Contract
 
 | Method | Path | Purpose |
@@ -345,8 +324,6 @@ just a coincidence buried in the raw count.
 | `GET` | `/api/analytics/kpis` | Same filters → all 9 KPIs + WoW deltas |
 | `GET` | `/api/analytics/trends` | `?metric=volume\|mttr&bucket=auto\|daily` → bucketed series (`bucket=daily` feeds the Dashboard's 30-day chart regardless of the global filter's range) |
 | `GET` | `/api/analytics/breach-risk` | SLA Breach Predictor — open incidents sorted by `risk_score`, incl. `risk` (SNOOZED/BREACHED/BLINKING/HIGH/MEDIUM/LOW) |
-| `GET` | `/api/analytics/customer-health` | Customer Health Score — one row per customer, 30-day window, incl. `volume_spike`/`anomaly` |
-| `GET` | `/api/analytics/mitre-heatmap` | Technique tag counts for the Threat Landscape heatmap |
 | `GET` | `/api/customers` | Reference data — customers visible to the caller's tenant scope |
 | `GET` | `/api/sla-config?partner=` | Current SLA overrides for a partner (tenant-scoped) |
 | `POST` | `/api/sla-config` | super_admin/partner_manager (own partner only) — set a per-partner or per-customer SLA target |

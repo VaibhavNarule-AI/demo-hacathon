@@ -196,25 +196,3 @@ def compute_trends(metric: str, query_filters: dict, tenant_filter: dict, bucket
         cursor = bucket_end
 
     return points
-
-
-def compute_mitre_heatmap(query_filters: dict, tenant_filter: dict) -> list[dict]:
-    """Count of incidents per MITRE technique, for the Threat Landscape heatmap.
-    mitre_techniques is stored comma-separated on each incident; an incident
-    tagged with 3 techniques contributes to all 3 counts."""
-    date_from, date_to = resolve_range(query_filters)
-    filters = {**query_filters, "date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
-    rows = fetch_all_for_analytics(filters, tenant_filter)
-
-    counts = {}
-    for r in rows:
-        techniques = r["mitre_techniques"] or ""
-        for t in (t.strip() for t in techniques.split(",")):
-            if t:
-                counts[t] = counts.get(t, 0) + 1
-
-    return sorted(
-        [{"technique": t, "count": c} for t, c in counts.items()],
-        key=lambda x: x["count"],
-        reverse=True,
-    )

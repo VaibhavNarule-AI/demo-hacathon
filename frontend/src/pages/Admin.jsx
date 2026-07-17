@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -10,20 +11,25 @@ const TABS = [
   { key: "users", label: "Users" },
   { key: "audit", label: "Audit Logs" },
   { key: "flow", label: "Flow Log" },
+  { key: "workload", label: "Analyst Workload" },
   { key: "tests", label: "Test Report" },
 ];
+
+const WORKLOAD_STATUS_DOT = { Overloaded: "🔴", Balanced: "🟡", Available: "🟢" };
 
 export default function Admin() {
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState(null);
   const [auditLogs, setAuditLogs] = useState(null);
   const [flowLog, setFlowLog] = useState(null);
+  const [workload, setWorkload] = useState(null);
   const [resetStatus, setResetStatus] = useState("");
 
   useEffect(() => {
     if (tab === "users" && users === null) api.get("/admin/users").then((res) => setUsers(res.data)).catch(() => setUsers([]));
     if (tab === "audit" && auditLogs === null) api.get("/admin/audit-logs").then((res) => setAuditLogs(res.data)).catch(() => setAuditLogs([]));
     if (tab === "flow") api.get("/admin/flow-log", { responseType: "text" }).then((res) => setFlowLog(res.data)).catch(() => setFlowLog("Could not load flow.log"));
+    if (tab === "workload") api.get("/analytics/workload").then((res) => setWorkload(res.data)).catch(() => setWorkload({ analysts: [], recommendations: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -35,7 +41,7 @@ export default function Admin() {
       setUsers(null);
       setAuditLogs(null);
     } catch (err) {
-      setResetStatus(err.response?.data?.detail || "Reset failed.");
+      setResetStatus(errorMessage(err, "Reset failed."));
     }
   }
 
@@ -122,6 +128,59 @@ export default function Admin() {
               <div className="loading-state">Loading…</div>
             ) : (
               <pre className="flow-log-viewer">{flowLog}</pre>
+            )
+          )}
+
+          {tab === "workload" && (
+            workload === null ? (
+              <div className="loading-state">Loading…</div>
+            ) : workload.analysts.length === 0 ? (
+              <div className="empty-state">No open tickets assigned to any analyst right now.</div>
+            ) : (
+              <>
+                <table className="incident-table">
+                  <thead>
+                    <tr>
+                      <th>Analyst</th>
+                      <th>Open Tickets</th>
+                      <th>Critical</th>
+                      <th>Pending First Response</th>
+                      <th>Avg MTTR</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workload.analysts.map((a) => (
+                      <tr key={a.analyst}>
+                        <td>{a.analyst}</td>
+                        <td className="mono">{a.open_tickets}</td>
+                        <td className="mono">{a.critical_tickets}</td>
+                        <td className="mono">{a.pending_tickets}</td>
+                        <td className="mono">{a.avg_mttr_h}h</td>
+                        <td>{WORKLOAD_STATUS_DOT[a.status]} {a.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {workload.recommendations.length > 0 && (
+                  <div className="workload-recommendations">
+                    <h4>Recommendation</h4>
+                    {workload.recommendations.map((r, i) => (
+                      <div key={i} className="workload-rec-card">
+                        <p>
+                          Move <strong>{r.move_count} tickets</strong> from{" "}
+                          <strong>{r.from_analyst}</strong> → <strong>{r.to_analyst}</strong>
+                        </p>
+                        <p className="workload-rec-meta">
+                          Estimated SLA Improvement: <strong>+{r.estimated_sla_improvement_pct}%</strong>
+                        </p>
+                        <p className="workload-rec-meta">{r.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )
           )}
 

@@ -8,7 +8,7 @@ _Filled/updated by `rapid-builder` during the build. Mirrors `/logs/build.log`._
 | backend/app/repositories/incident_repository.py | ✅ | Parameterized WHERE builder; tenant scope always ANDed, never overridden |
 | backend/app/services/analytics_service.py | ✅ | All 9 KPIs + WoW delta + weekly trends — verified against seeded data |
 | backend/app/main.py | ✅ | 4 logical routers + /health, /flow, /demo/reset, /test-report + SPA hosting |
-| backend/seed.py | ✅ | 5,000 incidents / 20 customers / 4 users — verified run |
+| backend/seed.py | ✅ | 2,000 incidents / 5 customers / 4 users — verified run |
 | frontend/src/pages/Login.jsx | ✅ | Step 1/2/3 console markers present |
 | frontend/src/components/ProtectedRoute.jsx | ✅ | Token + expiry + role allowlist |
 | frontend/src/components/KPICards.jsx | ✅ | 9 cards, 3 groups, WoW delta |

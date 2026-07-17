@@ -22,9 +22,8 @@ live 60-second walkthrough of onboarding a new partner from scratch.
 3. Click an incident row in the table — drill-down modal opens with the
    Event→Created→Opened→First Response→Closed timeline stepper, MITRE technique,
    assigned analyst, recommendation.
-4. Scroll to Customer Health — click the lowest-scoring red card. Say: "This is
-   what an account manager reads out in a QBR." Watch the whole dashboard filter
-   to that customer.
+4. Click a bar on **Top Customers by Volume**. Say: "Every chart drills down —
+   this jumps straight into Incidents pre-filtered to that customer."
 5. **Live demo, no pre-baked data:** click **Demo Setup**. Walk the 4 steps live —
    register a new partner, onboard a customer, set a 5-minute Critical SLA, create
    a Critical ticket. The ticket appears **blinking red** in the Early Warning
@@ -51,9 +50,9 @@ in `/flow`). Step 5's blinking-to-saved moment is the other one that lands harde
 
 **Backup if the live API breaks:** Skip straight to `/test-report`
 (`testcases/test_report.html`) — it's a static, already-generated page showing all
-16 test cases (tenant isolation, KPI math, breach-predictor math, health-score math,
-SLA overrides, blinking detection, close-ticket SLA-saved) passing, so the
-correctness claim still stands even if the live demo has a network hiccup.
+18 test cases (tenant isolation, KPI math, breach-predictor math, SLA overrides,
+blinking detection, close-ticket SLA-saved) passing, so the correctness claim
+still stands even if the live demo has a network hiccup.
 
 **Proof to pull up:** `/health` · `/flow` · `testcases/test_report.html` · the Kiwi
 TCMS run at `https://dev.securityhub365.com/kiwi/runs/search/`

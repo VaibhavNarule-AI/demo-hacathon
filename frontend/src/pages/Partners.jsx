@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const SEVERITIES = ["Critical", "Major", "Minor"];
 const DEFAULT_SLA = { Critical: 240, Major: 480, Minor: 1440 };
@@ -59,7 +60,7 @@ export default function Partners() {
       setContactEmail("");
       loadPartners();
     } catch (err) {
-      setStatus(err.response?.data?.detail || "Could not register partner.");
+      setStatus(errorMessage(err, "Could not register partner."));
     }
   }
 
@@ -78,7 +79,7 @@ export default function Partners() {
       const res = await api.get("/sla-config", { params: { partner: selectedPartner } });
       setConfigs(res.data);
     } catch (err) {
-      setStatus(err.response?.data?.detail || "Could not save SLA config.");
+      setStatus(errorMessage(err, "Could not save SLA config."));
     }
   }
 

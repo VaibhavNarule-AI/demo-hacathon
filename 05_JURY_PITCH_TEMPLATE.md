@@ -64,12 +64,3 @@ a partner manager, or a single customer's viewer.
   global-default), and that the breach math actually uses whatever's configured
   instead of a hardcoded constant. A real deployment would set 4h/8h/24h and never
   touch it again.
-
-- Q: How is the Customer Health Score weighted, and why those numbers?
-  A: `100 − (breaches×12) − (fp_rate×0.6) − (avg_mttr_h×1.5)`, clamped 0–100 over a
-  30-day window. Breaches are weighted heaviest because they're the thing a customer
-  actually notices and escalates about; false-positive rate and MTTR matter but
-  don't individually sink the score the way repeated breaches do. It's a starting
-  point tuned against this seed data, not a universal constant — the formula lives
-  in one function (`health_score.py`) specifically so it can be re-weighted per
-  MSSP without touching anything else.

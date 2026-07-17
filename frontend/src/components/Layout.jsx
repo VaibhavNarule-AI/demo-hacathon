@@ -15,8 +15,6 @@ import WarRoomBanner from "./WarRoomBanner";
 const NAV_ITEMS = [
   { path: "/", label: "Dashboard", icon: "📊" },
   { path: "/breach-predictor", label: "SLA Breach Predictor", icon: "⏰" },
-  { path: "/customer-health", label: "Customer Health", icon: "💚" },
-  { path: "/threat-landscape", label: "Threat Landscape", icon: "🗺️" },
   { path: "/partners", label: "Partner Management", icon: "👥", roles: ["super_admin", "partner_manager"] },
   { path: "/notifications", label: "Notifications", icon: "🔔" },
   { path: "/incidents", label: "Incidents", icon: "🚨" },

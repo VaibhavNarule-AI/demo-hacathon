@@ -103,6 +103,78 @@ def fetch_recent_breach_counts(tenant_filter: dict, since_iso: str) -> dict:
         conn.close()
 
 
+def fetch_recent_incident_counts(tenant_filter: dict, since_iso: str) -> dict:
+    """(customer, category) -> incident count in the last N days, batched once --
+    this is the "repeat incident" / repeated-attack-pattern signal for the
+    Smart Priority Score, distinct from fetch_recent_breach_counts (which only
+    counts SLA breaches, not raw incident volume)."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT customer, category, COUNT(*) c FROM incidents
+                WHERE {where_sql} AND created_time >= ? AND category IS NOT NULL
+                GROUP BY customer, category""",
+            (*params, since_iso),
+        ).fetchall()
+        return {(r["customer"], r["category"]): r["c"] for r in rows}
+    finally:
+        conn.close()
+
+
+def fetch_analyst_open_stats(tenant_filter: dict) -> dict:
+    """assigned_analyst -> {open_count, critical_count, pending_count} across
+    currently-open incidents -- the live "how full is each analyst's queue"
+    view the Workload Balancer ranks against."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT assigned_analyst,
+                       COUNT(*) open_count,
+                       SUM(CASE WHEN severity = 'Critical' THEN 1 ELSE 0 END) critical_count,
+                       SUM(CASE WHEN first_response_time IS NULL THEN 1 ELSE 0 END) pending_count
+                FROM incidents
+                WHERE {where_sql} AND opened_time IS NOT NULL AND closed_time IS NULL
+                      AND assigned_analyst IS NOT NULL
+                GROUP BY assigned_analyst""",
+            params,
+        ).fetchall()
+        return {
+            r["assigned_analyst"]: {
+                "open_count": r["open_count"],
+                "critical_count": r["critical_count"],
+                "pending_count": r["pending_count"],
+            }
+            for r in rows
+        }
+    finally:
+        conn.close()
+
+
+def fetch_analyst_mttr(tenant_filter: dict, since_iso: str) -> dict:
+    """assigned_analyst -> avg MTTR (hours) over incidents they closed in the
+    last N days -- a slower average resolution time is itself a workload
+    signal (it takes this analyst longer per ticket, so the same open count
+    represents more real work for them than for a faster analyst)."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT assigned_analyst,
+                       AVG((julianday(closed_time) - julianday(opened_time)) * 24) avg_h
+                FROM incidents
+                WHERE {where_sql} AND assigned_analyst IS NOT NULL
+                      AND opened_time IS NOT NULL AND closed_time IS NOT NULL
+                      AND created_time >= ?
+                GROUP BY assigned_analyst""",
+            (*params, since_iso),
+        ).fetchall()
+        return {r["assigned_analyst"]: (r["avg_h"] or 0.0) for r in rows}
+    finally:
+        conn.close()
+
+
 def fetch_all_for_analytics(query_filters: dict, tenant_filter: dict):
     """No LIMIT -- analytics needs the full matching set to aggregate correctly."""
     where_sql, params = build_where(query_filters, tenant_filter)

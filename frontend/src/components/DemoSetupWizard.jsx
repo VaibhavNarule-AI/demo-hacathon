@@ -1,5 +1,6 @@
 import { useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const STEPS = ["Register Partner", "Create Customer", "Configure SLA", "Create Ticket"];
 
@@ -58,7 +59,7 @@ export default function DemoSetupWizard({ onClose, onComplete }) {
       }
       setStep((s) => s + 1);
     } catch (err) {
-      setError(err.response?.data?.detail || "Step failed.");
+      setError(errorMessage(err, "Step failed."));
     } finally {
       setSubmitting(false);
     }

@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 echo "Step 1: docker build -t pulsesoc:v2 ."
 docker build -t pulsesoc:v2 .
 
-echo "Step 2: seeding demo data (5,000 incidents, 20 customers, 4 users)"
+echo "Step 2: seeding demo data (2,000 incidents, 5 customers, 4 users)"
 python3 backend/seed.py
 
 echo "Step 3: running qe-guardian test suite"
@@ -37,6 +37,10 @@ kubectl delete pod -l app=soc-dashboard --ignore-not-found=true > /dev/null 2>&1
 
 echo "Step 5c: waiting for the pod to be ready, then port-forwarding the Service to :30080"
 kubectl wait --for=condition=ready pod -l app=soc-dashboard --timeout=90s || true
+
+echo "Step 5d: seeding the pod's own database (its hostPath is not shared with docker-compose's ./data on a minikube docker-driver cluster)"
+kubectl exec deploy/soc-dashboard -- python seed.py || echo "pod seed failed -- login on :30080 will 401 until this is re-run"
+
 pkill -f "kubectl port-forward svc/soc-dashboard" > /dev/null 2>&1 || true
 kubectl port-forward svc/soc-dashboard 30080:80 > /tmp/soc-dashboard-portforward.log 2>&1 &
 sleep 3

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const RECOMMENDATIONS = {
   Phishing: "Block sender domain, force password reset for the targeted mailbox, and re-run the phishing awareness module for the affected user.",
@@ -14,6 +15,22 @@ const RECOMMENDATIONS = {
 
 const SEVERITY_ORDER = { Critical: 0, Major: 1, Minor: 2, Informational: 3 };
 const PAGE_SIZE = 15;
+
+const PRIORITY_CLASS = {
+  "Critical Priority": "priority-critical",
+  "High Priority": "priority-high",
+  "Medium Priority": "priority-medium",
+  "Low Priority": "priority-low",
+};
+
+function PriorityBadge({ score, label }) {
+  if (score === null || score === undefined) return <span className="mono" style={{ color: "var(--text-faint)" }}>—</span>;
+  return (
+    <span className={`priority-badge ${PRIORITY_CLASS[label] || ""}`} title={label}>
+      {score}
+    </span>
+  );
+}
 
 function fmtDate(iso) {
   if (!iso) return "—";
@@ -52,7 +69,7 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
   const [detail, setDetail] = useState(null);
   const [detailError, setDetailError] = useState("");
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("created_time");
+  const [sortKey, setSortKey] = useState("priority_score");
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState("details");
@@ -69,7 +86,15 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
     }
     const sorted = [...rows].sort((a, b) => {
       let cmp;
-      if (sortKey === "severity") cmp = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+      if (sortKey === "priority_score") {
+        // Closed/never-opened incidents carry no priority score -- always
+        // sink to the bottom regardless of sort direction, since they're
+        // not part of "what should I work next" either way.
+        if (a.priority_score === null && b.priority_score === null) cmp = 0;
+        else if (a.priority_score === null) return 1;
+        else if (b.priority_score === null) return -1;
+        else cmp = a.priority_score - b.priority_score;
+      } else if (sortKey === "severity") cmp = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
       else if (sortKey === "status") cmp = a.status.localeCompare(b.status);
       else cmp = a.created_time.localeCompare(b.created_time);
       return sortDir === "asc" ? cmp : -cmp;
@@ -99,7 +124,7 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
       const res = await api.get(`/incidents/${id}`);
       setDetail(res.data);
     } catch (err) {
-      setDetailError(err.response?.data?.detail || "Could not load incident.");
+      setDetailError(errorMessage(err, "Could not load incident."));
     }
   }
 
@@ -149,7 +174,7 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
       const res = await api.get(`/incidents/${detail.id}`);
       setDetail(res.data);
     } catch (err) {
-      setActionStatus(err.response?.data?.detail || "Could not snooze.");
+      setActionStatus(errorMessage(err, "Could not snooze."));
     } finally {
       setActing(false);
     }
@@ -163,7 +188,7 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
       setActionStatus("Email sent to outbox.");
       setEmails(null);
     } catch (err) {
-      setActionStatus(err.response?.data?.detail || "Could not send email.");
+      setActionStatus(errorMessage(err, "Could not send email."));
     } finally {
       setActing(false);
     }
@@ -201,6 +226,9 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
           <table className="incident-table">
             <thead>
               <tr>
+                <th className="sortable" onClick={() => toggleSort("priority_score")}>
+                  Priority {sortKey === "priority_score" && (sortDir === "asc" ? "▲" : "▼")}
+                </th>
                 <th>Ticket</th>
                 <th>Customer</th>
                 <th className="sortable" onClick={() => toggleSort("severity")}>
@@ -219,6 +247,7 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
             <tbody>
               {pageRows.map((inc) => (
                 <tr key={inc.id} onClick={() => openDetail(inc.id)}>
+                  <td><PriorityBadge score={inc.priority_score} label={inc.priority_label} /></td>
                   <td className="mono">{inc.ticket_number}</td>
                   <td>{inc.customer}</td>
                   <td><span className={`badge ${inc.severity}`}>{inc.severity}</span></td>
@@ -269,6 +298,21 @@ export default function IncidentTable({ incidents, loading, onRequestClose, onAc
 
                 {tab === "details" && (
                   <dl>
+                    {detail.priority_score !== null && detail.priority_score !== undefined && (
+                      <>
+                        <dt>Smart Priority Score</dt>
+                        <dd>
+                          <span className={`priority-badge ${PRIORITY_CLASS[detail.priority_label] || ""}`}>
+                            {detail.priority_score} / 100
+                          </span>{" "}
+                          <span style={{ color: "var(--text-soft)" }}>{detail.priority_label}</span>
+                        </dd>
+                        <dt>Reason</dt>
+                        <dd>{detail.priority_reasons.join(" · ")}</dd>
+                        <dt>Recommended Action</dt>
+                        <dd><strong>{detail.recommended_action}</strong></dd>
+                      </>
+                    )}
                     <dt>Customer</dt>
                     <dd>{detail.customer} ({detail.partner})</dd>
                     <dt>Severity</dt>

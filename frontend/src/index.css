@@ -666,7 +666,7 @@ label {
   border-radius: var(--radius);
   padding: 2.2rem;
   width: 100%;
-  max-width: 360px;
+  max-width: 440px;
   box-shadow: var(--shadow);
 }
 .login-card h1 {
@@ -697,13 +697,49 @@ label {
   font-size: 0.78rem;
   color: var(--text-soft);
 }
-.demo-creds table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 0.5rem;
+.demo-creds-title {
+  margin: 0 0 0.6rem;
 }
-.demo-creds td {
-  padding: 0.2rem 0;
+.demo-account-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.7rem;
+  row-gap: 0.1rem;
+  width: 100%;
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  padding: 0.5rem 0.3rem;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border-radius: 6px;
+}
+.demo-account-row:last-child {
+  border-bottom: none;
+}
+.demo-account-row:hover {
+  background: var(--surface-raised);
+}
+.demo-account-email {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+  color: var(--text);
+  font-size: 0.76rem;
+}
+.demo-account-pass {
+  flex: none;
+  color: var(--accent);
+  font-size: 0.76rem;
+}
+.demo-account-scope {
+  flex: 1 0 100%;
+  font-size: 0.72rem;
+  color: var(--text-soft);
 }
 
 /* ---- Filter bar v2 ---- */
@@ -1172,6 +1208,81 @@ table.incident-table tr:hover td {
 .badge.status-Closed {
   background: var(--good-soft);
   color: var(--good);
+}
+
+/* ---- Smart Incident Priority Score ---- */
+.priority-badge {
+  display: inline-block;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15em 0.6em;
+  border-radius: 5px;
+}
+.priority-badge.priority-critical {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.priority-badge.priority-high {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.priority-badge.priority-medium {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.priority-badge.priority-low {
+  background: var(--surface-raised);
+  color: var(--text-soft);
+}
+.priority-summary-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.priority-summary-ticket {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.priority-summary-reason {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+.priority-summary-action {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+/* ---- Analyst Workload Balancer ---- */
+.workload-recommendations {
+  margin-top: 1.2rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border);
+}
+.workload-recommendations h4 {
+  margin: 0 0 0.7rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+}
+.workload-rec-card {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.8rem 1.1rem;
+  margin-bottom: 0.6rem;
+}
+.workload-rec-card p {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+.workload-rec-card p:last-child { margin-bottom: 0; }
+.workload-rec-meta {
+  color: var(--text-soft);
+  font-size: 0.82rem !important;
 }
 
 /* ---- Timeline stepper (drill-down) ---- */

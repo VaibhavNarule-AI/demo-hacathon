@@ -4,13 +4,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AppProvider } from "./context/AppContext";
 import Admin from "./pages/Admin";
 import BreachPredictor from "./pages/BreachPredictor";
-import CustomerHealth from "./pages/CustomerHealth";
 import Dashboard from "./pages/Dashboard";
 import Incidents from "./pages/Incidents";
 import Login from "./pages/Login";
 import Notifications from "./pages/Notifications";
 import Partners from "./pages/Partners";
-import ThreatLandscape from "./pages/ThreatLandscape";
 import Unauthorized from "./pages/Unauthorized";
 
 const ALL_ROLES = ["super_admin", "partner_manager", "customer_viewer", "analyst"];
@@ -39,8 +37,6 @@ export default function App() {
         >
           <Route path="/" element={<Dashboard />} />
           <Route path="/breach-predictor" element={<BreachPredictor />} />
-          <Route path="/customer-health" element={<CustomerHealth />} />
-          <Route path="/threat-landscape" element={<ThreatLandscape />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/incidents" element={<Incidents />} />
           <Route

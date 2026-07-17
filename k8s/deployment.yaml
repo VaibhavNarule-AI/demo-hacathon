@@ -3,10 +3,15 @@
 # already exist locally -- devops/deploy.sh builds it with `docker build`
 # right before `kubectl apply -f k8s/`.
 #
-# Only /data is backed by a hostPath here (matching the docker-compose volume
-# for the SQLite file) -- logs/testcases inside the pod are ephemeral for this
-# path. docker-compose is the primary demo (host-visible logs/testcases);
-# this manifest is the "yes, this also runs on k8s" proof.
+# /data uses a hostPath, but on a minikube docker-driver cluster the node is
+# itself a container with its own filesystem -- this hostPath is NOT the same
+# file as docker-compose's ./data, even though the path string looks like a
+# Mac path. The pod's SQLite file is its own, isolated copy. It must be seeded
+# separately: `kubectl exec deploy/soc-dashboard -- python seed.py` (see
+# devops/deploy.sh, which does this after the pod is ready). logs/testcases
+# inside the pod are similarly ephemeral. docker-compose is the primary demo
+# (host-visible logs/testcases); this manifest is the "yes, this also runs on
+# k8s" proof.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,7 +55,7 @@ spec:
       volumes:
         - name: soc-data
           hostPath:
-            path: /tmp/soc-data
+            path: /Users/vaibhav.narule@gruve.ai/Library/CloudStorage/OneDrive-GruveAI/git/hackathon-final/data
             type: DirectoryOrCreate
 ---
 apiVersion: v1

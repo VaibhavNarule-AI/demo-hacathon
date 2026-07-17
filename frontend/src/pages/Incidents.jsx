@@ -6,6 +6,7 @@ import IncidentTable from "../components/IncidentTable";
 import WarRoomBanner from "../components/WarRoomBanner";
 import { useApp } from "../context/AppContext";
 import api from "../services/api";
+import { errorMessage } from "../utils/errors";
 
 const SEVERITY_COLORS = { Critical: "#f87171", Major: "#fbbf24", Minor: "#3aa0ff", Informational: "#34d399" };
 
@@ -59,7 +60,7 @@ export default function Incidents() {
         if (!cancelled) setIncidents(res.data);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.response?.data?.detail || "Failed to load incidents.");
+        if (!cancelled) setError(errorMessage(err, "Failed to load incidents."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
