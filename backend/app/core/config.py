@@ -8,7 +8,7 @@ Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "hackathon-demo-secret-change-in-prod")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_MINUTES = 60
+JWT_EXPIRE_MINUTES = 480  # 8h -- a SOC analyst's shift, not a 1h generic default
 
 FLOW_LOG_PATH = os.environ.get("FLOW_LOG_PATH", "../logs/flow.log")
 

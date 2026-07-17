@@ -206,13 +206,13 @@ def main():
 
     print("Step 4: creating 4 demo users")
     demo_users = [
-        ("superadmin", "Admin@123", "super_admin", None, None),
-        ("partner_mgr", "Partner@123", "partner_manager", "partner-a", None),
-        ("customer_viewer", "Customer@123", "customer_viewer", "partner-a", "customer-1"),
-        ("analyst", "Analyst@123", "analyst", "partner-a", None),
+        ("superadmin@pulsesoc.local", "Admin@123", "super_admin", None, None),
+        ("partner_mgr@pulsesoc.local", "Partner@123", "partner_manager", "partner-a", None),
+        ("customer_viewer@pulsesoc.local", "Customer@123", "customer_viewer", "partner-a", "customer-1"),
+        ("analyst@pulsesoc.local", "Analyst@123", "analyst", "partner-a", None),
     ]
-    for username, password, role, partner_id, customer_id in demo_users:
-        create_user(username, hash_password(password), role, partner_id, customer_id)
+    for email, password, role, partner_id, customer_id in demo_users:
+        create_user(email, hash_password(password), role, partner_id, customer_id)
 
     conn = get_connection()
     incident_count = conn.execute("SELECT COUNT(*) c FROM incidents").fetchone()["c"]

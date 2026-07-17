@@ -2,33 +2,30 @@
 `sla_result` in analytics_service tells you what already breached; this tells
 you what's *about to*, while there's still time to act on it.
 
-SLA targets default to the P1/P2/P3 buckets already used for the Avg Response
-KPI: Critical=P1=4h, Major=P2=8h, Minor=P3=24h -- but a partner_manager or
-super_admin can override the target per partner or per customer via
-/api/sla-config (see sla_config_repository). Informational has no SLA target
-(same reason it's excluded from the P1/P2/P3 KPI) and is never at risk of
-"breaching" something that was never promised.
+risk_score = pct_of_sla_elapsed*0.6 + severity_weight*0.3 + breach_history*0.1
+  - severity_weight: Critical=30, Major=20, Minor=10 (Informational has no SLA
+    target and is never scored)
+  - breach_history: count of this customer's Breached incidents in the last 30
+    days * 5 -- a customer with a track record of breaches is inherently
+    riskier even at the same elapsed pct
 
-An incident already past 100% of its target is labeled BREACHED, not HIGH --
-it isn't a prediction anymore, and folding stale already-breached tickets into
-the "act now, still time" HIGH-risk count would both be misleading and dilute
-the signal for the handful of incidents actually worth an analyst's attention
-right now.
-
-blinking_critical is a separate, narrower flag: Critical with <=5 min left, or
-Major with <=15 min left. That's what drives the war-room-style blinking UI --
-deliberately tighter than the HIGH-risk threshold so it only fires for the
-handful of tickets seconds away from breaching.
+status:
+  - BREACHED if time_left < 0 -- already happened, not a prediction anymore
+  - BLINKING if time_left <= 5 min (Critical) or <= 15 min (Major) -- the
+    signal that drives the war-room banner and the blinking ticket chip
+  - HIGH if risk_score > 75, MEDIUM 50-75, else LOW
 """
 
 import datetime
 
-from app.repositories.incident_repository import fetch_open_incidents
+from app.repositories.incident_repository import fetch_open_incidents, fetch_recent_breach_counts
 from app.repositories.sla_config_repository import build_sla_lookup, resolve_sla_minutes
 
-HIGH_RISK_PCT = 70
-MEDIUM_RISK_PCT = 50
+SEVERITY_WEIGHT = {"Critical": 30, "Major": 20, "Minor": 10}
 BLINK_THRESHOLD_MINUTES = {"Critical": 5, "Major": 15}
+HIGH_RISK_SCORE = 75
+MEDIUM_RISK_SCORE = 50
+BREACH_HISTORY_LOOKBACK_DAYS = 30
 
 
 def _parse(dt_str):
@@ -38,7 +35,7 @@ def _parse(dt_str):
     return dt
 
 
-def _format_remaining(remaining_minutes: float) -> str:
+def format_remaining(remaining_minutes: float) -> str:
     if remaining_minutes <= 0:
         return f"{abs(round(remaining_minutes))} min overdue"
     if remaining_minutes >= 60:
@@ -52,31 +49,49 @@ def compute_breach_risk(tenant_filter: dict) -> list[dict]:
     now = datetime.datetime.now(datetime.timezone.utc)
     rows = fetch_open_incidents(tenant_filter)
     customer_specific, partner_default = build_sla_lookup(tenant_filter)
+    since = (now - datetime.timedelta(days=BREACH_HISTORY_LOOKBACK_DAYS)).isoformat()
+    breach_counts = fetch_recent_breach_counts(tenant_filter, since)
 
     results = []
     for r in rows:
+        severity_weight = SEVERITY_WEIGHT.get(r["severity"])
+        if severity_weight is None:
+            continue  # Informational -- no SLA target, never scored
+
         target_minutes = resolve_sla_minutes(
             customer_specific, partner_default, r["partner"], r["customer"], r["severity"]
         )
-        if target_minutes is None:
-            continue  # Informational -- no SLA target, never "at risk"
-
         opened_time = _parse(r["opened_time"])
         elapsed_minutes = (now - opened_time).total_seconds() / 60
         remaining_minutes = target_minutes - elapsed_minutes
         pct = min(elapsed_minutes / target_minutes * 100, 999)
 
-        if pct >= 100:
-            risk = "BREACHED"
-        elif pct > HIGH_RISK_PCT:
-            risk = "HIGH"
-        elif pct >= MEDIUM_RISK_PCT:
-            risk = "MEDIUM"
-        else:
-            risk = "LOW"
+        breach_history = breach_counts.get(r["customer"], 0)
+        risk_score = pct * 0.6 + severity_weight * 0.3 + (breach_history * 5) * 0.1
 
         blink_threshold = BLINK_THRESHOLD_MINUTES.get(r["severity"])
         blinking_critical = blink_threshold is not None and 0 <= remaining_minutes <= blink_threshold
+
+        snoozed_until = r["snoozed_until"]
+        is_snoozed = bool(snoozed_until) and _parse(snoozed_until) > now
+        if is_snoozed:
+            # Snoozed tickets stop blinking/alerting until the snooze expires --
+            # auto_action.check_breaches() resets snoozed_until once it's past,
+            # at which point blinking resumes on its own.
+            blinking_critical = False
+
+        if is_snoozed:
+            risk = "SNOOZED"
+        elif remaining_minutes < 0:
+            risk = "BREACHED"
+        elif blinking_critical:
+            risk = "BLINKING"
+        elif risk_score > HIGH_RISK_SCORE:
+            risk = "HIGH"
+        elif risk_score >= MEDIUM_RISK_SCORE:
+            risk = "MEDIUM"
+        else:
+            risk = "LOW"
 
         results.append({
             "incident_id": r["id"],
@@ -87,11 +102,15 @@ def compute_breach_risk(tenant_filter: dict) -> list[dict]:
             "elapsed_mins": round(elapsed_minutes),
             "sla_target_minutes": target_minutes,
             "pct": round(pct, 1),
+            "risk_score": round(risk_score, 1),
             "risk": risk,
-            "breaches_in": _format_remaining(remaining_minutes),
+            "breaches_in": format_remaining(remaining_minutes),
             "remaining_minutes": round(remaining_minutes, 1),
             "blinking_critical": blinking_critical,
+            "assignee": r.get("assignee"),
+            "escalation_level": r.get("escalation_level", 0),
+            "snoozed_until": r.get("snoozed_until"),
         })
 
-    results.sort(key=lambda x: x["pct"], reverse=True)
+    results.sort(key=lambda x: x["risk_score"], reverse=True)
     return results

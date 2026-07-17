@@ -4,14 +4,14 @@ import Logo from "../components/Logo";
 import api from "../services/api";
 
 const DEMO_USERS = [
-  { user: "superadmin", pass: "Admin@123", role: "super_admin", scope: "all partners" },
-  { user: "partner_mgr", pass: "Partner@123", role: "partner_manager", scope: "partner-a" },
-  { user: "customer_viewer", pass: "Customer@123", role: "customer_viewer", scope: "partner-a / customer-1" },
-  { user: "analyst", pass: "Analyst@123", role: "analyst", scope: "partner-a, read-only" },
+  { user: "superadmin@pulsesoc.local", pass: "Admin@123", role: "super_admin", scope: "all partners" },
+  { user: "partner_mgr@pulsesoc.local", pass: "Partner@123", role: "partner_manager", scope: "partner-a" },
+  { user: "customer_viewer@pulsesoc.local", pass: "Customer@123", role: "customer_viewer", scope: "partner-a / customer-1" },
+  { user: "analyst@pulsesoc.local", pass: "Analyst@123", role: "analyst", scope: "partner-a, read-only" },
 ];
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,20 +21,20 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    console.log("Step 1: login submitted for", username);
+    console.log("Step 1: login submitted for", email);
     try {
-      const res = await api.post("/auth/login", { username, password });
+      const res = await api.post("/auth/login", { email, password });
       console.log("Step 2: JWT issued, role =", res.data.role);
 
       localStorage.setItem("token", res.data.access_token);
-      localStorage.setItem("username", username);
+      localStorage.setItem("email", email);
       localStorage.setItem("role", res.data.role);
       localStorage.setItem("partner_id", res.data.partner_id || "");
       localStorage.setItem("customer_id", res.data.customer_id || "");
-      localStorage.setItem("tokenExp", String(Date.now() + 60 * 60 * 1000));
+      localStorage.setItem("tokenExp", String(Date.now() + 8 * 60 * 60 * 1000));
 
       console.log("Step 3: token stored, redirecting to dashboard");
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed");
     } finally {
@@ -53,11 +53,12 @@ export default function Login() {
         {error && <div className="error">{error}</div>}
         <form onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="username">Username</label>
+            <label htmlFor="email">Email</label>
             <input
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               autoFocus
               required
             />

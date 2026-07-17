@@ -17,7 +17,7 @@ ROLES = ("super_admin", "partner_manager", "customer_viewer", "analyst")
 
 
 class CurrentUser(BaseModel):
-    username: str
+    email: str
     role: str
     partner_id: Optional[str] = None
     customer_id: Optional[str] = None
@@ -36,7 +36,7 @@ def create_access_token(user: CurrentUser) -> str:
         minutes=JWT_EXPIRE_MINUTES
     )
     payload = {
-        "sub": user.username,
+        "email": user.email,
         "role": user.role,
         "partner_id": user.partner_id,
         "customer_id": user.customer_id,
@@ -70,13 +70,13 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     user = CurrentUser(
-        username=payload["sub"],
+        email=payload["email"],
         role=payload["role"],
         partner_id=payload.get("partner_id"),
         customer_id=payload.get("customer_id"),
     )
     write_flow_log(
-        f"200 - token verified for {user.username} (role={user.role}, "
+        f"200 - auth check: {user.email} (role={user.role}, "
         f"partner={user.partner_id}, customer={user.customer_id})"
     )
     return user
@@ -86,7 +86,7 @@ def require_role(*allowed_roles: str):
     def _dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if current_user.role not in allowed_roles:
             write_flow_log(
-                f"403 - {current_user.username} (role={current_user.role}) "
+                f"403 - {current_user.email} (role={current_user.role}) "
                 f"denied, requires one of {allowed_roles}"
             )
             raise HTTPException(
@@ -102,8 +102,11 @@ def get_tenant_filter(current_user: CurrentUser) -> dict:
     """Server-side tenant scope. Query-string params the caller sends are never
     trusted directly for partner/customer -- this is the only source of truth."""
     if current_user.role == "super_admin":
-        return {}
-    if current_user.role == "customer_viewer":
-        return {"partner": current_user.partner_id, "customer": current_user.customer_id}
-    # partner_manager and analyst are both scoped to their own partner only
-    return {"partner": current_user.partner_id}
+        result = {}
+    elif current_user.role == "customer_viewer":
+        result = {"partner": current_user.partner_id, "customer": current_user.customer_id}
+    else:
+        # partner_manager and analyst are both scoped to their own partner only
+        result = {"partner": current_user.partner_id}
+    write_flow_log(f"tenant-filter: {current_user.email} (role={current_user.role}) -> {result}")
+    return result

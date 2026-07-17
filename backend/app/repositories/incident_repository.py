@@ -86,6 +86,23 @@ def fetch_open_incidents(tenant_filter: dict):
         conn.close()
 
 
+def fetch_recent_breach_counts(tenant_filter: dict, since_iso: str) -> dict:
+    """customer -> count of Breached incidents in the last N days, batched once
+    instead of one query per open incident in the breach-risk computation."""
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""SELECT customer, COUNT(*) c FROM incidents
+                WHERE {where_sql} AND sla_result = 'Breached' AND created_time >= ?
+                GROUP BY customer""",
+            (*params, since_iso),
+        ).fetchall()
+        return {r["customer"]: r["c"] for r in rows}
+    finally:
+        conn.close()
+
+
 def fetch_all_for_analytics(query_filters: dict, tenant_filter: dict):
     """No LIMIT -- analytics needs the full matching set to aggregate correctly."""
     where_sql, params = build_where(query_filters, tenant_filter)
@@ -199,6 +216,28 @@ def close_incident_row(incident_id: int, tenant_filter: dict, closed_time: str, 
                                    ELSE summary END
                 WHERE id = ? AND {where_sql}""",
             (closed_time, sla_result, resolution_notes, resolution_notes or "", resolution_notes, incident_id, *params),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+        row = conn.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+def snooze_incident_row(incident_id: int, tenant_filter: dict, snoozed_until: str, comment):
+    where_sql, params = build_where({}, tenant_filter)
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            f"""UPDATE incidents
+                SET snoozed_until = ?, snooze_count = snooze_count + 1,
+                    summary = CASE WHEN ? IS NOT NULL AND ? != ''
+                                   THEN summary || ' | Snooze note: ' || ?
+                                   ELSE summary END
+                WHERE id = ? AND {where_sql}""",
+            (snoozed_until, comment, comment or "", comment, incident_id, *params),
         )
         conn.commit()
         if cursor.rowcount == 0:

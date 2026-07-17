@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Layout from "../components/Layout";
 import api from "../services/api";
 
 const SEVERITIES = ["Critical", "Major", "Minor"];
@@ -84,7 +83,7 @@ export default function Partners() {
   }
 
   return (
-    <Layout latencyMs={null}>
+    <>
       <div className="table-card" style={{ marginBottom: "1.2rem" }}>
         <div style={{ display: "flex", gap: "0.5rem", padding: "1rem 1.2rem 0" }}>
           {role === "super_admin" && (
@@ -191,6 +190,6 @@ export default function Partners() {
           </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

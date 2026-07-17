@@ -42,13 +42,24 @@ function Timeline({ detail }) {
   );
 }
 
-export default function IncidentTable({ incidents, loading }) {
+const SNOOZE_OPTIONS = [
+  { label: "15 min", mins: 15 },
+  { label: "30 min", mins: 30 },
+  { label: "1 hour", mins: 60 },
+];
+
+export default function IncidentTable({ incidents, loading, onRequestClose, onActionDone }) {
   const [detail, setDetail] = useState(null);
   const [detailError, setDetailError] = useState("");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("created_time");
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
+  const [tab, setTab] = useState("details");
+  const [emails, setEmails] = useState(null);
+  const [teams, setTeams] = useState(null);
+  const [actionStatus, setActionStatus] = useState("");
+  const [acting, setActing] = useState(false);
 
   const filtered = useMemo(() => {
     let rows = incidents;
@@ -80,11 +91,81 @@ export default function IncidentTable({ incidents, loading }) {
 
   async function openDetail(id) {
     setDetailError("");
+    setTab("details");
+    setEmails(null);
+    setTeams(null);
+    setActionStatus("");
     try {
       const res = await api.get(`/incidents/${id}`);
       setDetail(res.data);
     } catch (err) {
       setDetailError(err.response?.data?.detail || "Could not load incident.");
+    }
+  }
+
+  function closeDetail() {
+    setDetail(null);
+    setDetailError("");
+  }
+
+  async function openTab(nextTab) {
+    setTab(nextTab);
+    if (nextTab === "email" && emails === null) {
+      try {
+        const res = await api.get("/notifications/emails");
+        setEmails(res.data.filter((e) => e.ticket_number === detail.ticket_number));
+      } catch {
+        setEmails([]);
+      }
+    }
+    if (nextTab === "teams" && teams === null) {
+      try {
+        const res = await api.get("/notifications/teams");
+        setTeams(res.data.filter((t) => t.ticket_number === detail.ticket_number));
+      } catch {
+        setTeams([]);
+      }
+    }
+  }
+
+  function requestResolve() {
+    onRequestClose({
+      incident_id: detail.id,
+      ticket_number: detail.ticket_number,
+      customer: detail.customer,
+      severity: detail.severity,
+      breaches_in: detail.status,
+    });
+    closeDetail();
+  }
+
+  async function snooze(mins) {
+    setActing(true);
+    setActionStatus("");
+    try {
+      await api.post(`/incidents/${detail.id}/snooze`, { mins });
+      setActionStatus(`Snoozed for ${mins} min.`);
+      onActionDone?.();
+      const res = await api.get(`/incidents/${detail.id}`);
+      setDetail(res.data);
+    } catch (err) {
+      setActionStatus(err.response?.data?.detail || "Could not snooze.");
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function sendEmail() {
+    setActing(true);
+    setActionStatus("");
+    try {
+      await api.post("/notifications/send-email", { ticket_number: detail.ticket_number, trigger_type: "Manual" });
+      setActionStatus("Email sent to outbox.");
+      setEmails(null);
+    } catch (err) {
+      setActionStatus(err.response?.data?.detail || "Could not send email.");
+    } finally {
+      setActing(false);
     }
   }
 
@@ -165,36 +246,111 @@ export default function IncidentTable({ incidents, loading }) {
       )}
 
       {(detail || detailError) && (
-        <div className="modal-backdrop" onClick={() => { setDetail(null); setDetailError(""); }}>
+        <div className="modal-backdrop" onClick={closeDetail}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {detailError ? (
               <div className="error-state">{detailError}</div>
             ) : (
               <>
                 <h3>{detail.ticket_number}</h3>
-                <Timeline detail={detail} />
-                <dl>
-                  <dt>Customer</dt>
-                  <dd>{detail.customer} ({detail.partner})</dd>
-                  <dt>Severity</dt>
-                  <dd><span className={`badge ${detail.severity}`}>{detail.severity}</span></dd>
-                  <dt>Status</dt>
-                  <dd>{detail.status}</dd>
-                  <dt>SLA Result</dt>
-                  <dd><span className={`badge ${detail.sla_result}`}>{detail.sla_result}</span></dd>
-                  <dt>SIEM / SOAR</dt>
-                  <dd>{detail.siem} / {detail.soar}</dd>
-                  <dt>Category</dt>
-                  <dd>{detail.category}</dd>
-                  <dt>Summary</dt>
-                  <dd>{detail.summary}</dd>
-                  <dt>MITRE Techniques</dt>
-                  <dd>{detail.mitre_techniques}</dd>
-                  <dt>Assigned Analyst</dt>
-                  <dd>{detail.assigned_analyst || "Unassigned"}</dd>
-                  <dt>Recommendation</dt>
-                  <dd>{RECOMMENDATIONS[detail.category] || "Triage per standard playbook for this category."}</dd>
-                </dl>
+
+                <div className="modal-tabs">
+                  {["details", "timeline", "email", "teams"].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={`modal-tab ${tab === t ? "active" : ""}`}
+                      onClick={() => openTab(t)}
+                    >
+                      {t === "email" ? "Email Outbox" : t === "teams" ? "Teams Outbox" : t[0].toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {tab === "details" && (
+                  <dl>
+                    <dt>Customer</dt>
+                    <dd>{detail.customer} ({detail.partner})</dd>
+                    <dt>Severity</dt>
+                    <dd><span className={`badge ${detail.severity}`}>{detail.severity}</span></dd>
+                    <dt>Status</dt>
+                    <dd>{detail.status}</dd>
+                    <dt>SLA Result</dt>
+                    <dd><span className={`badge ${detail.sla_result}`}>{detail.sla_result}</span></dd>
+                    <dt>SIEM / SOAR</dt>
+                    <dd>{detail.siem} / {detail.soar}</dd>
+                    <dt>Category</dt>
+                    <dd>{detail.category}</dd>
+                    <dt>Summary</dt>
+                    <dd>{detail.summary}</dd>
+                    <dt>MITRE Techniques</dt>
+                    <dd>{detail.mitre_techniques}</dd>
+                    <dt>Assigned Analyst</dt>
+                    <dd>{detail.assigned_analyst || "Unassigned"}</dd>
+                    <dt>Escalation Level</dt>
+                    <dd>{detail.escalation_level || 0}</dd>
+                    <dt>Recommendation</dt>
+                    <dd>{RECOMMENDATIONS[detail.category] || "Triage per standard playbook for this category."}</dd>
+                  </dl>
+                )}
+
+                {tab === "timeline" && <Timeline detail={detail} />}
+
+                {tab === "email" && (
+                  emails === null ? (
+                    <div className="loading-state">Loading…</div>
+                  ) : emails.length === 0 ? (
+                    <div className="empty-state">No emails sent for this ticket yet.</div>
+                  ) : (
+                    emails.map((e) => (
+                      <div key={e.id} className="outbox-item">
+                        <div className="outbox-subject">{e.subject}</div>
+                        <div className="outbox-meta">To: {e.to_email} · {fmtDate(e.sent_at)} · {e.status}</div>
+                      </div>
+                    ))
+                  )
+                )}
+
+                {tab === "teams" && (
+                  teams === null ? (
+                    <div className="loading-state">Loading…</div>
+                  ) : teams.length === 0 ? (
+                    <div className="empty-state">No Teams alerts sent for this ticket yet.</div>
+                  ) : (
+                    teams.map((t) => {
+                      let title = "Teams alert";
+                      try {
+                        title = JSON.parse(t.payload_json).title;
+                      } catch {
+                        /* keep default */
+                      }
+                      return (
+                        <div key={t.id} className="outbox-item">
+                          <div className="outbox-subject">{title}</div>
+                          <div className="outbox-meta">{fmtDate(t.created_at)} · {t.status}</div>
+                        </div>
+                      );
+                    })
+                  )
+                )}
+
+                {actionStatus && <p style={{ color: "var(--text-soft)", fontSize: "0.85rem", marginTop: "0.8rem" }}>{actionStatus}</p>}
+
+                {detail.status !== "Closed" && (
+                  <div className="modal-actions">
+                    {SNOOZE_OPTIONS.map((opt) => (
+                      <button key={opt.mins} className="btn secondary" disabled={acting} onClick={() => snooze(opt.mins)}>
+                        Snooze {opt.label}
+                      </button>
+                    ))}
+                    <button className="btn secondary" disabled={acting} onClick={sendEmail}>
+                      Send Email
+                    </button>
+                    <button className="btn" disabled={acting} onClick={requestResolve}>
+                      Resolve
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

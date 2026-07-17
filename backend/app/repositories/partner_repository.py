@@ -3,14 +3,15 @@ import datetime
 from app.repositories.db import get_connection
 
 
-def create_partner(partner_name: str, partner_id: str, contact_email: str):
+def create_partner(partner_name: str, partner_id: str, contact_email: str, teams_webhook_url_mock: str = None):
     conn = get_connection()
     try:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        webhook = teams_webhook_url_mock or f"https://teams.mock/{partner_id}"
         conn.execute(
-            "INSERT INTO partners (partner_name, partner_id, contact_email, created_at, is_active) "
-            "VALUES (?,?,?,?,1)",
-            (partner_name, partner_id, contact_email, now),
+            "INSERT INTO partners (partner_name, partner_id, contact_email, teams_webhook_url_mock, created_at, is_active) "
+            "VALUES (?,?,?,?,?,1)",
+            (partner_name, partner_id, contact_email, webhook, now),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM partners WHERE partner_id = ?", (partner_id,)).fetchone()

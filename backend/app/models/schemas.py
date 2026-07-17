@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 
@@ -28,10 +28,20 @@ class AsyncLoginStatus(BaseModel):
 
 
 class MeResponse(BaseModel):
-    username: str
+    email: str
     role: str
     partner_id: Optional[str] = None
     customer_id: Optional[str] = None
+
+
+class SnoozeIncidentRequest(BaseModel):
+    mins: int
+    comment: Optional[str] = None
+
+
+class SendEmailRequest(BaseModel):
+    ticket_number: str
+    trigger_type: str = "Manual"
 
 
 class CustomerOut(BaseModel):

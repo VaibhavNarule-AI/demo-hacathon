@@ -1,59 +1,95 @@
 # PulseSOC — SOC Executive Command Center
 
-A single-pane, multi-tenant executive dashboard for a multi-tenant MSSP SOC —
-global filters, 9 KPI cards with week-over-week deltas, two weekly trend charts,
-incident drill-down, and three signature features (SLA Breach Predictor, Customer
-Health Score, Live Command Center Mode), all scoped server-side by role
+A single-pane, multi-tenant executive dashboard for an MSSP SOC — global filters,
+9 KPI cards with week-over-week deltas and sparklines, incident drill-down, and
+four signature features (SLA Breach Predictor with live blinking/snooze/auto-escalation,
+Customer Health Score with anomaly detection, MITRE ATT&CK Threat Landscape, and
+Partner Registration + SLA Configuration), all scoped server-side by role
 (super_admin, partner_manager, customer_viewer, analyst). Built against
 `docs/SOC_Executive_Dashboard_Problem_Final.docx` (HACK-SOC-01).
+
+**Zero third-party runtime dependencies.** No dayjs, no chart library, no email/Teams
+SDK. Timezone conversion uses native `Intl.DateTimeFormat`; every chart is hand-rolled
+Canvas 2D (`ChartCard.jsx`); email/Teams notifications are mocked to local files
+(`/tmp/emails`, `/tmp/teams`) plus DB outbox rows — fully offline, no network calls out.
+Only React/Vite/FastAPI/SQLite/PyJWT/bcrypt and Python stdlib.
 
 Full architecture, RBAC matrix, DB schema, and KPI formula-by-formula assumptions
 are in [`02_SOLUTION_ARCHITECTURE_TEMPLATE.md`](02_SOLUTION_ARCHITECTURE_TEMPLATE.md).
 Framework rules (logging, git flow, JWT/RBAC spec) are in [`CLAUDE.md`](CLAUDE.md).
 
+## Layout
+
+An enterprise sidebar shell (`Layout.jsx`, 260px fixed dark sidebar + 60px top bar
+with the global filter/theme/timezone/bell/Command Center controls), 8 routed pages:
+
+| Page | Route | What it shows |
+|---|---|---|
+| Dashboard | `/` | Charts only — Alerts Trend, Severity Breakdown, Top Customers, SIEM vs SOAR, Customer Health + Breach Predictor summary widgets. Every chart is clickable and drills into a filtered Incidents view. |
+| SLA Breach Predictor | `/breach-predictor` | War Room banner, Early Warning table, Breach Risk by Customer chart. |
+| Customer Health | `/customer-health` | QBR-ready health cards, anomaly banner, SLA compliance trend. |
+| Threat Landscape | `/threat-landscape` | MITRE ATT&CK heatmap (real seeded techniques grouped by tactic) + Top Techniques chart. |
+| Partner Management | `/partners` | Register Partner, Configure SLA, Demo Setup wizard. |
+| Notifications | `/notifications` | Email Outbox, Teams Outbox, Bell History — file-backed proof of every mock send. |
+| Incidents | `/incidents` | Full drill-down table: filters, chips, search, sort, pagination, row modal with Details/Timeline/Email/Teams tabs and Resolve/Snooze/Send Email actions. |
+| Admin | `/admin` (super_admin only) | Users, audit logs, `flow.log` viewer, embedded test report. |
+
 ## Signature features
 
-- **SLA Breach Predictor** — forward-looking, not backward-looking. Every open
-  incident's SLA target (configurable per partner/customer), elapsed time, and
-  countdown are recomputed live. A Critical incident with ≤5 min left (or Major
-  with ≤15 min) is flagged `blinking_critical`, driving a war-room-style blinking
-  ticket chip and a red top-of-page banner with a live 1-second countdown.
-- **Customer Health Score** — one QBR-ready number per customer:
-  `100 − (breaches×12) − (fp_rate×0.6) − (avg_mttr_h×1.5)`, clamped 0–100, over a
-  30-day window. Click a card to filter the whole dashboard to that customer.
-- **Live Command Center Mode** — full-screen, dark, auto-refreshing every 10s.
-  KPI cards pulse when a value changes; a bottom ticker scrolls recent incident
-  activity war-room-marquee style.
-- **Partner Registration + SLA Configuration** — register a new partner, onboard a
-  customer under it, and set a custom SLA target per severity, all through the UI
-  (or the `Demo Setup` wizard, which does all four steps — register, onboard,
-  configure, create a ticket — in about a minute).
+- **SLA Breach Predictor** — `risk_score = pct_elapsed×0.6 + severity_weight×0.3 +
+  (breach_history×5)×0.1`. A Critical incident with ≤5 min left (or Major with
+  ≤15 min) is `BLINKING`, driving the war-room banner and a blinking ticket chip.
+  Snoozing suppresses blinking until the snooze expires; an `asyncio` background
+  loop (`auto_action.py`, checking every 60s — no Celery) auto-escalates breached
+  tickets and opens a `FOLLOWUP-*` ticket if a breach goes unresolved for 10+ minutes.
+- **Customer Health Score** — `100 − breaches×12 − fp_rate×0.6 − avg_mttr_h×1.5 −
+  max(0,volume_spike)×10`, clamped 0–100, over a 30-day window. `volume_spike` is
+  this-week vs last-week ticket count, flagged as an anomaly above 0.5.
+- **Threat Landscape** — MITRE ATT&CK technique tags on every incident, grouped by
+  real tactic (Initial Access, Execution, Credential Access, …) into a heatmap.
+- **Partner Registration + SLA Configuration** — register a partner (auto-provisions
+  a mock Teams webhook URL), onboard a customer, set a per-severity SLA override,
+  all through the UI — or the `Demo Setup` wizard, which does all four steps in
+  about a minute.
+- **Notifications (mocked, zero third-party)** — Critical-incident creation, breach
+  escalation, and manual sends write a real `.eml`/`.json` file to disk plus an
+  outbox DB row. No SMTP, no webhook POST — verifiable by a judge without network
+  access.
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
-    subgraph Client
-        Browser["Browser (React SPA)"]
+    subgraph Client["Browser (React SPA, zero third-party)"]
+        UI["Sidebar shell + 8 pages<br/>Canvas 2D charts, native Intl tz"]
     end
     subgraph App["One FastAPI process — logical services"]
-        AUTH["/api/auth"]
-        INC["/api/incidents"]
-        ANA["/api/analytics — KPIs, breach-risk, customer-health"]
-        CUST["/api/customers"]
+        AUTH["/api/auth (JWT, email identity)"]
+        INC["/api/incidents (create/close/snooze/drill-down)"]
+        ANA["/api/analytics (KPIs, breach-risk, health, mitre-heatmap)"]
         PART["/api/partners, /api/sla-config"]
+        NOTIF["/api/notifications (email/teams outbox, bell)"]
+        ADMIN["/api/admin (users, audit-logs, flow-log)"]
+        LOOP(["asyncio auto_action_loop()<br/>every 60s: escalate + follow-up"])
         DB[("SQLite\n/data/app.db")]
+        MOCKS["email_mock.py / teams_mock.py<br/>writes /tmp/emails, /tmp/teams"]
     end
-    Browser -- "Bearer JWT" --> AUTH
-    Browser -- "Bearer JWT + filters" --> INC
-    Browser -- "Bearer JWT + filters" --> ANA
-    Browser -- "Bearer JWT" --> CUST
-    Browser -- "Bearer JWT" --> PART
+    UI -- "Bearer JWT" --> AUTH
+    UI -- "Bearer JWT + filters" --> INC
+    UI -- "Bearer JWT + filters" --> ANA
+    UI -- "Bearer JWT" --> PART
+    UI -- "Bearer JWT" --> NOTIF
+    UI -- "Bearer JWT (super_admin)" --> ADMIN
     AUTH --> DB
     INC --> DB
     ANA --> DB
-    CUST --> DB
     PART --> DB
+    NOTIF --> DB
+    ADMIN --> DB
+    LOOP --> DB
+    LOOP --> MOCKS
+    INC --> MOCKS
+    MOCKS --> DB
 ```
 
 ## Run it
@@ -78,31 +114,32 @@ sequence — it's the same one used to verify this build.
 
 ## Demo accounts
 
-| Username | Password | Role | Scope |
+| Email | Password | Role | Scope |
 |---|---|---|---|
-| `superadmin` | `Admin@123` | `super_admin` | all partners, all customers |
-| `partner_mgr` | `Partner@123` | `partner_manager` | partner-a only |
-| `customer_viewer` | `Customer@123` | `customer_viewer` | partner-a / customer-1 only |
-| `analyst` | `Analyst@123` | `analyst` | partner-a, read-only |
+| `superadmin@pulsesoc.local` | `Admin@123` | `super_admin` | all partners, all customers |
+| `partner_mgr@pulsesoc.local` | `Partner@123` | `partner_manager` | partner-a only |
+| `customer_viewer@pulsesoc.local` | `Customer@123` | `customer_viewer` | partner-a / customer-1 only |
+| `analyst@pulsesoc.local` | `Analyst@123` | `analyst` | partner-a, read-only |
 
-Log in as each in turn — the dashboard's data (and the `/admin` / `Partner Management`
-links) visibly narrow with the role. This is deliberately the most convincing 30
-seconds of the demo: tenant scope comes from the JWT, not from anything the client
-sends.
+Log in as each in turn — the sidebar nav and the dashboard's data visibly narrow
+with the role (`Partner Management` and `Admin` disappear for non-privileged roles).
+This is deliberately the most convincing 30 seconds of the demo: tenant scope comes
+from the JWT (8h expiry — a SOC analyst's shift), not from anything the client sends.
 
 ## The 60-second live demo
 
-Click **Demo Setup** (super_admin, top right) to run all four steps live in front of
+From `/partners`, click **Demo Setup** to run all four steps live in front of
 judges — no pre-baked data:
-1. Register a new partner
+1. Register a new partner (auto-provisions a mock Teams webhook)
 2. Onboard a customer under it
 3. Set a 5-minute Critical SLA (deliberately short, for the demo)
-4. Create a Critical ticket — it shows up **blinking** in the Early Warning table
-   immediately, since 5 minutes elapsed is already the whole SLA budget
+4. Create a Critical ticket — it shows up **blinking** in the war-room banner and
+   the Early Warning table immediately, and a real email + Teams mock file lands
+   in `/tmp/emails` / `/tmp/teams` (visible live on the `/notifications` page)
 
-Then hit **Close / Resolve Now** before the countdown runs out: toast "SLA saved
-with N min left!", confetti, and the KPI cards / health score refresh live, no
-reload. Every step is logged to `logs/flow.log`.
+Then open the ticket from `/incidents` and hit **Resolve**: toast "SLA saved with
+N min left!", confetti, and the KPI cards / health score refresh live, no reload.
+Every step is logged to `logs/flow.log` (viewable live on `/admin`).
 
 ## Proof endpoints
 
@@ -110,8 +147,10 @@ reload. Every step is logged to `logs/flow.log`.
 |---|---|
 | `/health` | Liveness |
 | `/flow` | Last 5 lines of the live JWT/RBAC/ticket/SLA request trace (`logs/flow.log`) |
-| `/test-report` | qe-guardian's generated test report (`testcases/test_report.html`) |
+| `/test-report` | qe-guardian's generated test report (`testcases/test_report.html`) — also embedded in `/admin` |
+| `/api/admin/flow-log` (super_admin only) | Last 100 lines of `flow.log`, for the Admin page's live viewer |
 | `/demo/reset` (POST, super_admin only) | Re-seeds demo data on demand |
+| `/tmp/emails/*.eml`, `/tmp/teams/*.json` | Real files written by the zero-third-party notification mocks |
 
 ## KPI assumptions (short version — full table in `02_SOLUTION_ARCHITECTURE_TEMPLATE.md`)
 
@@ -142,13 +181,15 @@ instead of everything pinned at one extreme. Exports the first 200 rows to
 
 ## Testing
 
-`backend/test_runner.py` runs 16 test cases in-process against the seeded database
+`backend/test_runner.py` runs 20 test cases in-process against the seeded database
 (no live server needed) — login, RBAC, tenant isolation, KPI math, breach-predictor
-math, customer-health-score math, live ticket creation, SLA config overrides,
-blinking-critical detection, and the close-ticket SLA-saved flow, all cross-checked
-directly against raw SQL. Results land in `testcases/TEST_CASE_TRACKER.csv`,
-`testcases/test_report.html`, and `logs/test.log`, and get pushed to Kiwi TCMS
-(`testcases/kiwi_push.log` records the outcome either way).
+math, customer-health-score math (including the volume-spike term), live ticket
+creation, SLA config overrides, blinking-critical detection, snooze suppression,
+the close-ticket SLA-saved flow, the zero-third-party email-outbox mock, the MITRE
+heatmap, and admin-only `flow.log` RBAC — all cross-checked directly against raw
+SQL. Results land in `testcases/TEST_CASE_TRACKER.csv`, `testcases/test_report.html`,
+and `logs/test.log`, and get pushed to Kiwi TCMS (`testcases/kiwi_push.log` records
+the outcome either way).
 
 ```bash
 python backend/test_runner.py
@@ -157,6 +198,8 @@ python backend/test_runner.py
 ## What's out of scope (by design)
 
 - Real SIEM/SOAR integrations — data is generated, not pulled live.
+- Real SMTP/Teams webhook delivery — mocked to local files + DB outbox rows, per
+  the zero-third-party / air-gapped mandate.
 - Postgres/production database — SQLite for the demo (`DB_TYPE` env toggle documents
   the migration path).
 - Four separate containers — logically split services, physically one FastAPI

@@ -1,40 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import BreachPredictor from "../components/BreachPredictor";
-import CloseIncidentModal from "../components/CloseIncidentModal";
-import CommandCenter from "../components/CommandCenter";
-import Confetti from "../components/Confetti";
-import CustomerHealth from "../components/CustomerHealth";
-import DemoSetupWizard from "../components/DemoSetupWizard";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ChartCard from "../components/ChartCard";
 import GlobalFilterBar from "../components/GlobalFilterBar";
-import IncidentTable from "../components/IncidentTable";
 import KPICards, { KPICardsSkeleton } from "../components/KPICards";
-import Layout from "../components/Layout";
-import NewIncidentModal from "../components/NewIncidentModal";
-import Toast from "../components/Toast";
-import { MttrSlaTrendChart, VolumeTrendChart } from "../components/TrendChart";
-import WarRoomBanner from "../components/WarRoomBanner";
+import { useApp } from "../context/AppContext";
 import api from "../services/api";
 
-const REFRESH_MS = 30_000;
-const BREACH_RISK_REFRESH_MS = 30_000;
-
-function isoDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-function defaultFilters(fixedCustomer) {
-  const to = new Date();
-  const from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
-  return {
-    customers: fixedCustomer ? [fixedCustomer] : [],
-    siem: [],
-    soar: [],
-    tier: "",
-    rangePreset: "90d",
-    from: isoDate(from),
-    to: isoDate(to),
-  };
-}
+const SEVERITY_COLORS = { Critical: "#f87171", Major: "#fbbf24", Minor: "#3aa0ff", Informational: "#34d399" };
 
 function toQuery(filters) {
   const params = {};
@@ -47,212 +19,199 @@ function toQuery(filters) {
   return params;
 }
 
+function isoDate(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+function last30DaysParams(filters) {
+  const to = new Date();
+  const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  return {
+    ...(filters.customers.length && { customer: filters.customers.join(",") }),
+    ...(filters.siem.length && { siem: filters.siem.join(",") }),
+    ...(filters.soar.length && { soar: filters.soar.join(",") }),
+    ...(filters.tier && { tier: filters.tier }),
+    from: `${isoDate(from)}T00:00:00`,
+    to: `${isoDate(to)}T23:59:59`,
+  };
+}
+
 export default function Dashboard() {
-  const fixedCustomer = localStorage.getItem("customer_id") || "";
-  const [filters, setFilters] = useState(defaultFilters(fixedCustomer));
-  const [customers, setCustomers] = useState([]);
+  const navigate = useNavigate();
+  const { filters, setFilters, resetFilters, fixedCustomer, customers, refreshKey, breachRisk } = useApp();
   const [kpis, setKpis] = useState(null);
-  const [volumeTrend, setVolumeTrend] = useState([]);
+  const [dailyTrend, setDailyTrend] = useState([]);
   const [mttrTrend, setMttrTrend] = useState([]);
   const [incidents, setIncidents] = useState([]);
+  const [health, setHealth] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [latencyMs, setLatencyMs] = useState(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
-  const [showNewIncident, setShowNewIncident] = useState(false);
-  const [showCommandCenter, setShowCommandCenter] = useState(false);
-  const [showDemoSetup, setShowDemoSetup] = useState(false);
-  const [toasts, setToasts] = useState([]);
-  const toastId = useRef(0);
-
-  const [breachRisk, setBreachRisk] = useState([]);
-  const [breachRiskLoading, setBreachRiskLoading] = useState(true);
-  const [breachRiskFetchedAt, setBreachRiskFetchedAt] = useState(Date.now());
-  const [closingTicket, setClosingTicket] = useState(null);
-  const [confettiTrigger, setConfettiTrigger] = useState(0);
-
-  function pushToast(message, kind = "info") {
-    const id = ++toastId.current;
-    setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
-  }
-
-  function loadCustomers() {
-    api.get("/customers").then((res) => setCustomers(res.data)).catch(() => {});
-  }
-
-  useEffect(loadCustomers, []);
-
-  function loadBreachRisk() {
-    api.get("/analytics/breach-risk").then((res) => {
-      setBreachRisk(res.data);
-      setBreachRiskFetchedAt(Date.now());
-      setBreachRiskLoading(false);
-    }).catch(() => setBreachRiskLoading(false));
-  }
-
-  useEffect(() => {
-    loadBreachRisk();
-    const id = setInterval(loadBreachRisk, BREACH_RISK_REFRESH_MS);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
-
-    function load() {
-      setError("");
-      const started = performance.now();
-      const params = toQuery(filters);
-
-      return Promise.all([
-        api.get("/analytics/kpis", { params }),
-        api.get("/analytics/trends", { params: { ...params, metric: "volume" } }),
-        api.get("/analytics/trends", { params: { ...params, metric: "mttr" } }),
-        api.get("/incidents", { params }),
-      ])
-        .then(([kpiRes, volRes, mttrRes, incRes]) => {
-          if (cancelled) return;
-          setKpis(kpiRes.data);
-          setVolumeTrend(volRes.data);
-          setMttrTrend(mttrRes.data);
-          setIncidents(incRes.data);
-          setLatencyMs(Math.round(performance.now() - started));
-          setLastUpdatedAt(Date.now());
-        })
-        .catch((err) => {
-          if (!cancelled) setError(err.response?.data?.detail || "Failed to load dashboard data.");
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }
-
     setLoading(true);
-    load();
-    const id = setInterval(load, REFRESH_MS);
+    setError("");
+    const params = toQuery(filters);
+
+    Promise.all([
+      api.get("/analytics/kpis", { params }),
+      api.get("/analytics/trends", { params: { ...last30DaysParams(filters), metric: "volume", bucket: "daily" } }),
+      api.get("/analytics/trends", { params: { ...params, metric: "mttr" } }),
+      api.get("/incidents/drill-down", { params }),
+      api.get("/analytics/customer-health"),
+    ])
+      .then(([kpiRes, trendRes, mttrRes, incRes, healthRes]) => {
+        if (cancelled) return;
+        setKpis(kpiRes.data);
+        setDailyTrend(trendRes.data);
+        setMttrTrend(mttrRes.data);
+        setIncidents(incRes.data);
+        setHealth(healthRes.data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.response?.data?.detail || "Failed to load dashboard.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
-  }, [filters]);
-
-  function refreshAll() {
-    setFilters((f) => ({ ...f }));
-    loadBreachRisk();
-  }
-
-  function focusCustomer(customerId) {
-    if (fixedCustomer) return;
-    setFilters((f) => ({ ...f, customers: [customerId] }));
-  }
-
-  function handleIncidentCreated(incident) {
-    setShowNewIncident(false);
-    pushToast(`Incident ${incident.ticket_number} created`, "success");
-    refreshAll();
-  }
-
-  function handleIncidentClosed(updated) {
-    setClosingTicket(null);
-    if (updated.sla_saved_message) {
-      pushToast(`${updated.ticket_number} closed — ${updated.sla_saved_message}`, "success");
-      setConfettiTrigger((t) => t + 1);
-    } else {
-      pushToast(`${updated.ticket_number} closed (SLA already breached)`, "error");
-    }
-    refreshAll();
-  }
-
-  function handleDemoSetupComplete(partnerId, customerId) {
-    setShowDemoSetup(false);
-    pushToast(`Demo ready — ${partnerId} / ${customerId} filtered in`, "success");
-    loadCustomers();
-    setFilters((f) => ({ ...f, customers: [customerId] }));
-    loadBreachRisk();
-  }
-
-  const blinkingTickets = breachRisk
-    .filter((r) => r.blinking_critical)
-    .map((r) => ({ ...r, fetchedAt: breachRiskFetchedAt }));
+  }, [filters, refreshKey]);
 
   const resultLabel = kpis
-    ? `Showing ${Math.round(kpis.alerts.value)} alerts from ${
-        filters.customers.length || customers.length
-      } customer${(filters.customers.length || customers.length) === 1 ? "" : "s"}`
+    ? `Showing ${Math.round(kpis.alerts.value)} alerts from ${filters.customers.length || customers.length} customer${
+        (filters.customers.length || customers.length) === 1 ? "" : "s"
+      }`
     : "";
 
-  if (showCommandCenter) {
-    return <CommandCenter onExit={() => setShowCommandCenter(false)} />;
+  const severityCounts = {};
+  incidents.forEach((i) => {
+    severityCounts[i.severity] = (severityCounts[i.severity] || 0) + 1;
+  });
+  const severityData = Object.entries(severityCounts).map(([severity, value]) => ({
+    severity,
+    value,
+    color: SEVERITY_COLORS[severity],
+  }));
+
+  const customerCounts = {};
+  incidents.forEach((i) => {
+    customerCounts[i.customer] = (customerCounts[i.customer] || 0) + 1;
+  });
+  const topCustomers = Object.entries(customerCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([customer, count]) => ({ customer, count }));
+
+  const siemSoarMap = {};
+  incidents.forEach((i) => {
+    siemSoarMap[i.siem] = siemSoarMap[i.siem] || { siem: i.siem, XSOAR: 0, Resilient: 0 };
+    siemSoarMap[i.siem][i.soar] = (siemSoarMap[i.siem][i.soar] || 0) + 1;
+  });
+  const siemSoarData = Object.values(siemSoarMap);
+
+  const healthyCount = health.filter((h) => h.status === "Healthy").length;
+  const atRiskCount = health.length - healthyCount;
+  const highRisk = breachRisk.filter((r) => r.risk === "HIGH" || r.risk === "BLINKING");
+
+  function goIncidents(extraParams) {
+    const qs = new URLSearchParams({ ...toQuery(filters), ...extraParams }).toString();
+    navigate(`/incidents?${qs}`);
   }
 
   return (
     <>
-      <WarRoomBanner blinkingTickets={blinkingTickets} onTakeAction={(ticket) => setClosingTicket(ticket)} />
+      <GlobalFilterBar
+        filters={filters}
+        onChange={setFilters}
+        onReset={resetFilters}
+        customers={customers}
+        fixedCustomer={fixedCustomer}
+        resultLabel={resultLabel}
+      />
 
-      <Layout
-        latencyMs={latencyMs}
-        lastUpdatedAt={lastUpdatedAt}
-        onNewIncident={() => setShowNewIncident(true)}
-        onEnterCommandCenter={() => setShowCommandCenter(true)}
-        onOpenDemoSetup={() => setShowDemoSetup(true)}
-      >
-        <GlobalFilterBar
-          filters={filters}
-          onChange={setFilters}
-          onReset={() => setFilters(defaultFilters(fixedCustomer))}
-          customers={customers}
-          fixedCustomer={fixedCustomer}
-          resultLabel={resultLabel}
+      {error && <div className="error-state">{error}</div>}
+
+      {loading && !kpis ? (
+        <KPICardsSkeleton />
+      ) : (
+        kpis && <KPICards kpis={kpis} volumeTrend={dailyTrend} mttrTrend={mttrTrend} />
+      )}
+
+      <div className="chart-grid">
+        <ChartCard
+          title="Alerts Trend (last 30 days)"
+          subtitle="Click a day to drill into that date in Incidents"
+          type="line"
+          data={dailyTrend.map((p) => ({ day: p.week_start.slice(5), alerts: p.values.alerts, incidents: p.values.incidents }))}
+          xKey="day"
+          series={[
+            { key: "alerts", label: "Alerts", color: "#3aa0ff" },
+            { key: "incidents", label: "Incidents", color: "#34d399" },
+          ]}
+          onSliceClick={(point) => goIncidents({ from: `${point.day}T00:00:00`, to: `${point.day}T23:59:59` })}
         />
-
-        {error && <div className="error-state">{error}</div>}
-
-        <BreachPredictor
-          risk={breachRisk}
-          loading={breachRiskLoading}
-          onFocusCustomer={focusCustomer}
-          onRequestClose={(ticket) => setClosingTicket(ticket)}
+        <ChartCard
+          title="Severity Breakdown"
+          subtitle="Click a slice to filter Incidents by severity"
+          type="donut"
+          data={severityData}
+          onSliceClick={(slice) => goIncidents({ severity: slice.severity })}
         />
+      </div>
 
-        {loading && !kpis ? <KPICardsSkeleton /> : <KPICards kpis={kpis} volumeTrend={volumeTrend} mttrTrend={mttrTrend} />}
+      <div className="chart-grid">
+        <ChartCard
+          title="Top Customers by Volume"
+          subtitle="Click a bar to filter Incidents by customer"
+          type="bar"
+          data={topCustomers}
+          xKey="customer"
+          series={[{ key: "count", label: "Incidents", color: "#3aa0ff" }]}
+          onSliceClick={(row) => goIncidents({ customer: row.customer })}
+        />
+        <ChartCard
+          title="SIEM vs SOAR"
+          subtitle="Click a segment to filter Incidents"
+          type="stacked-bar"
+          data={siemSoarData}
+          xKey="siem"
+          series={[
+            { key: "XSOAR", label: "XSOAR", color: "#3aa0ff" },
+            { key: "Resilient", label: "Resilient", color: "#34d399" },
+          ]}
+          onSliceClick={(row, i, key) => goIncidents({ siem: row.siem, soar: key })}
+        />
+      </div>
 
-        <div className="chart-grid">
-          <VolumeTrendChart data={volumeTrend} />
-          <MttrSlaTrendChart data={mttrTrend} />
+      <div className="dashboard-summary-row">
+        <div className="table-card summary-card">
+          <div className="summary-header">
+            <h3>Customer Health</h3>
+            <a href="/customer-health" className="btn-link">View All →</a>
+          </div>
+          <div className="summary-stats">
+            <span className="badge Matched">{healthyCount} Healthy</span>
+            <span className="badge Breached">{atRiskCount} At Risk / Critical</span>
+          </div>
         </div>
 
-        <div style={{ marginTop: "1.4rem" }}>
-          <CustomerHealth onSelectCustomer={focusCustomer} />
+        <div className="table-card summary-card">
+          <div className="summary-header">
+            <h3>SLA Breach Predictor</h3>
+            <a href="/breach-predictor" className="btn-link">View All →</a>
+          </div>
+          {highRisk.length > 0 ? (
+            <div className="breach-banner" style={{ margin: 0 }}>
+              ⚠️ {highRisk.length} incident{highRisk.length > 1 ? "s" : ""} at risk — Act now
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: "1rem 0" }}>All clear — nothing at risk right now.</div>
+          )}
         </div>
-
-        <div style={{ marginTop: "1.4rem" }}>
-          <IncidentTable incidents={incidents} loading={loading} />
-        </div>
-
-        {showNewIncident && (
-          <NewIncidentModal
-            customers={customers}
-            onClose={() => setShowNewIncident(false)}
-            onCreated={handleIncidentCreated}
-          />
-        )}
-
-        {closingTicket && (
-          <CloseIncidentModal
-            ticket={closingTicket}
-            onClose={() => setClosingTicket(null)}
-            onClosed={handleIncidentClosed}
-          />
-        )}
-
-        {showDemoSetup && (
-          <DemoSetupWizard onClose={() => setShowDemoSetup(false)} onComplete={handleDemoSetupComplete} />
-        )}
-
-        <Confetti trigger={confettiTrigger} />
-        <Toast toasts={toasts} />
-      </Layout>
+      </div>
     </>
   );
 }

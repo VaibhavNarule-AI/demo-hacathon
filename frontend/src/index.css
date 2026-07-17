@@ -296,12 +296,20 @@ label {
 .risk-bar-fill.risk-LOW {
   background: var(--good);
 }
+.risk-bar-fill.risk-BLINKING {
+  background: var(--bad);
+  animation: ticket-blink-bg 1s infinite;
+}
+.risk-bar-fill.risk-SNOOZED {
+  background: var(--text-soft);
+}
 .risk-label {
   font-size: 0.8rem;
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 .risk-label.risk-HIGH,
-.risk-label.risk-BREACHED {
+.risk-label.risk-BREACHED,
+.risk-label.risk-BLINKING {
   color: var(--bad);
   font-weight: 600;
 }
@@ -310,6 +318,13 @@ label {
 }
 .risk-label.risk-LOW {
   color: var(--good);
+}
+.risk-label.risk-SNOOZED {
+  color: var(--text-soft);
+}
+@keyframes ticket-blink-bg {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* ---- Skeleton loaders ---- */
@@ -507,6 +522,135 @@ label {
   color: var(--text-soft);
   font-size: 0.78rem;
   font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* ---- Sidebar layout (v2) ---- */
+.app-shell-v2 {
+  min-height: 100vh;
+  display: flex;
+}
+.sidebar {
+  width: 260px;
+  flex: none;
+  background: #0f172a;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.1rem 1.2rem;
+  border-bottom: 1px solid #1e293b;
+}
+.sidebar-brand .brand-name {
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.sidebar-nav {
+  flex: 1;
+  padding: 0.8rem 0.6rem;
+  overflow-y: auto;
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 0.88rem;
+  border-left: 3px solid transparent;
+  margin-bottom: 0.2rem;
+}
+.sidebar-link:hover {
+  background: #1e293b;
+}
+.sidebar-link.active {
+  background: #1e293b;
+  border-left-color: #3b82f6;
+  color: #fff;
+  font-weight: 600;
+}
+.sidebar-icon {
+  font-size: 1rem;
+}
+.sidebar-footer {
+  padding: 1rem 1.2rem;
+  border-top: 1px solid #1e293b;
+}
+.sidebar-footer .avatar {
+  margin: 0 auto 0.5rem;
+}
+.sidebar-footer .user-info {
+  text-align: center;
+}
+.sidebar-footer .user-name {
+  color: #fff;
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.main-area {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.topbar-v2 {
+  height: 60px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  flex-wrap: wrap;
+}
+.breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+.topbar-v2 .actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.bell-icon {
+  font-size: 1.1rem;
+  text-decoration: none;
+  padding: 0.2rem 0.4rem;
+}
+.page-container-v2 {
+  flex: 1;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+@media (max-width: 900px) {
+  .sidebar {
+    width: 220px;
+  }
+  .main-area {
+    margin-left: 220px;
+  }
 }
 
 /* ---- Login ---- */
@@ -806,7 +950,117 @@ label {
 }
 .chart-card h3 {
   font-size: 0.9rem;
-  margin: 0 0 0.8rem;
+  margin: 0 0 0.3rem;
+}
+.chart-subtitle {
+  font-size: 0.76rem;
+  color: var(--text-soft);
+  margin: 0 0 0.6rem;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.6rem;
+}
+.chart-legend-item {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.chart-legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* ---- Admin: flow log viewer + test report ---- */
+.flow-log-viewer {
+  background: #0a0e1a;
+  color: #9aa8c2;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.test-report-frame {
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+/* ---- Threat Landscape (MITRE heatmap) ---- */
+.mitre-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.9rem;
+  overflow-x: auto;
+}
+.mitre-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.mitre-tactic-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+}
+.mitre-cell {
+  border-radius: var(--radius);
+  padding: 0.7rem 0.6rem;
+  color: #fff;
+  font-size: 0.78rem;
+  cursor: default;
+}
+.mitre-cell-name {
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+.mitre-cell-count {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+/* ---- Dashboard summary widgets (Customer Health / Breach Predictor teasers) ---- */
+.dashboard-summary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.6rem;
+}
+.summary-card {
+  padding: 1.1rem 1.2rem;
+}
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.summary-header h3 {
+  padding: 0;
+  font-size: 0.9rem;
+}
+.summary-stats {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 /* ---- Table ---- */
@@ -1002,6 +1256,52 @@ table.incident-table tr:hover td {
 }
 .modal dt {
   color: var(--text-soft);
+}
+.modal-tabs {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.modal-tab {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.2rem;
+  margin-right: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.modal-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.outbox-item {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.82rem;
+}
+.outbox-item .outbox-subject {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+.outbox-item .outbox-meta {
+  color: var(--text-soft);
+  font-size: 0.76rem;
 }
 
 /* ---- States ---- */
