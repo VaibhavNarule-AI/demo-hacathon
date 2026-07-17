@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: soc-dashboard:v1-local
+    env_file: .env
+    environment:
+      DB_PATH: /data/app.db
+      FLOW_LOG_PATH: /logs/flow.log
+      TESTCASES_DIR: /testcases
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+      - ./testcases:/testcases
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5

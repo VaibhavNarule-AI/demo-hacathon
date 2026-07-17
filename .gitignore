@@ -1,0 +1,11 @@
+node_modules/
+venv/
+__pycache__/
+.env
+/data/
+/logs/*.log
+testcases/*.log
+dist/
+build/
+.mongo_data/
+.DS_Store

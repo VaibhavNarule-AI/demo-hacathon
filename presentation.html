@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SOC Executive Dashboard — Presentation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0b1220; --surface: #121a2b; --surface-raised: #172238; --border: #24314a;
+    --text: #e7ecf5; --text-soft: #9aa8c2; --accent: #3aa0ff; --accent-soft: rgba(58,160,255,0.14);
+    --good: #34d399; --good-soft: rgba(52,211,153,0.14);
+    --bad: #f87171; --bad-soft: rgba(248,113,113,0.14);
+    --warn: #fbbf24; --warn-soft: rgba(251,191,36,0.14);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; line-height: 1.55;
+  }
+  section {
+    min-height: 100vh; padding: 3rem 2rem; max-width: 980px; margin: 0 auto;
+    border-bottom: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center;
+  }
+  section:last-child { border-bottom: none; }
+  .slide-label {
+    text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.1em; color: var(--accent); font-weight: 700;
+  }
+  h1 { font-size: 2.1rem; margin: 0.4rem 0 0.6rem; }
+  h2 { font-size: 1.1rem; color: var(--text-soft); font-weight: 500; margin: 0 0 1.6rem; }
+  h3 { font-size: 0.95rem; margin: 1.6rem 0 0.6rem; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--surface-raised); padding: 0.1em 0.4em; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin-bottom: 1rem; }
+  th, td { border: 1px solid var(--border); padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: var(--surface-raised); color: var(--text-soft); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .cost-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 1rem; margin-top: 1rem; }
+  .cost-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; }
+  .cost-card .k { color: var(--bad); font-weight: 700; font-size: 1.3rem; }
+  .flow-diagram {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1.2rem 0;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85rem;
+  }
+  .flow-diagram .box { background: var(--surface); border: 1px solid var(--accent); color: var(--accent); border-radius: 7px; padding: 0.5rem 0.8rem; }
+  .flow-diagram .arrow { color: var(--text-soft); }
+  .badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.15em 0.55em; border-radius: 5px; }
+  .badge.good { background: var(--good-soft); color: var(--good); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .pitch-line { font-size: 1.3rem; font-weight: 600; color: var(--good); border-left: 3px solid var(--good); padding-left: 1rem; margin-top: 1.6rem; }
+  ul.tight li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body>
+
+<section>
+  <p class="slide-label">Slide 1 — Problem</p>
+  <h1>The data already exists. It just isn't surfaced.</h1>
+  <h2>A multi-tenant MSSP SOC serving many partners and customers has no single place to see how it's actually performing.</h2>
+  <div class="cost-grid">
+    <div class="cost-card"><div class="k">Zero visibility</div>Leadership and customers get a static report, not a live view of alert volume, SLA compliance, or noise.</div>
+    <div class="cost-card"><div class="k">Alert fatigue</div>Without a false-positive rate surfaced, analysts drown in noise no one is measuring.</div>
+    <div class="cost-card"><div class="k">Silent SLA risk</div>A breach is only visible after it's already happened — too late to intervene.</div>
+    <div class="cost-card"><div class="k">Trust gap</div>Every partner/customer needs their own scoped view — one dashboard for everyone isn't safe or credible.</div>
+  </div>
+</section>
+
+<section>
+  <p class="slide-label">Slide 2 — Architecture</p>
+  <h1>One process, four logical services, RBAC enforced server-side</h1>
+  <h2>4-hour build: logically split, physically one FastAPI process — same code, four containers whenever it's worth it.</h2>
+
+  <h3>RBAC Matrix</h3>
+  <table>
+    <tr><th>Role</th><th>Partner scope</th><th>Customer scope</th><th>Drill-down</th></tr>
+    <tr><td>super_admin</td><td>*</td><td>*</td><td>yes</td></tr>
+    <tr><td>partner_manager</td><td>own partner</td><td>all within partner</td><td>yes</td></tr>
+    <tr><td>customer_viewer</td><td>own partner</td><td>own customer only</td><td>own customer only</td></tr>
+    <tr><td>analyst</td><td>own partner</td><td>all within partner</td><td>yes (read-only)</td></tr>
+  </table>
+
+  <h3>KPI math — the assumptions, not just the formula</h3>
+  <table>
+    <tr><th>KPI</th><th>Assumption</th></tr>
+    <tr><td>Incidents</td><td>Alert → incident funnel: only counted once opened</td></tr>
+    <tr><td>SLA Compliance %</td><td>Never-opened incidents excluded from the denominator entirely</td></tr>
+    <tr><td>False-Positive Rate</td><td>Never opened at all — pre-computed at ingest, not derived per-query</td></tr>
+    <tr><td>P1/P2/P3 Response</td><td>Critical/Major/Minor only — Informational has no P-bucket</td></tr>
+  </table>
+</section>
+
+<section>
+  <p class="slide-label">Slide 3 — Live Flow</p>
+  <h1>Same dashboard. Different role. Watch the data narrow.</h1>
+  <h2>Tenant scope comes from the JWT, not from anything the client sends.</h2>
+
+  <div class="flow-diagram">
+    <span class="box">Login UI</span><span class="arrow">→</span>
+    <span class="box">POST /api/auth/login</span><span class="arrow">→</span>
+    <span class="box">JWT issued</span><span class="arrow">→</span>
+    <span class="box">GET /api/incidents + Bearer</span><span class="arrow">→</span>
+    <span class="box">RBAC filter (server-side)</span><span class="arrow">→</span>
+    <span class="box">UI renders scoped view</span>
+  </div>
+
+  <h3>Demo sequence</h3>
+  <ul class="tight">
+    <li><code>superadmin</code> → all partners, all customers</li>
+    <li><code>partner_mgr</code> → partner-a only, customer dropdown narrows</li>
+    <li><code>customer_viewer</code> → one customer, no partner picker at all</li>
+    <li>Direct-URL <code>/admin</code> as <code>customer_viewer</code> → <span class="badge bad">403</span>, visible live in <code>/flow</code></li>
+  </ul>
+</section>
+
+<section>
+  <p class="slide-label">Slide 4 — Trends, Drill-down &amp; Early Warning</p>
+  <h1>Beyond the KPI cards</h1>
+  <h2>Two weekly trend charts, incident-level drill-down, and a live SLA-breach early warning.</h2>
+  <ul class="tight">
+    <li><strong>Volume trend</strong> — alerts vs. incidents, weekly, showing the funnel narrowing</li>
+    <li><strong>MTTR vs SLA trend</strong> — dual-axis: resolution speed against compliance, side by side</li>
+    <li><strong>Drill-down</strong> — click any incident for MITRE technique, assigned analyst, and a category-specific recommendation</li>
+    <li><strong>Early warning (bonus)</strong> — a <span class="badge warn">P1 at risk</span> banner surfaces any Critical incident open 3+ hours, before it crosses the 4-hour SLA breach threshold — the difference between reacting to a breach and preventing one</li>
+  </ul>
+</section>
+
+<section>
+  <p class="slide-label">Slide 5 — Proof &amp; Pitch</p>
+  <h1>Four things you can check yourself, not four things we're asking you to trust</h1>
+  <table>
+    <tr><th>Proof</th><th>Where</th></tr>
+    <tr><td>Work happened</td><td><code>logs/</code> — one log per build stage</td></tr>
+    <tr><td>It's correct</td><td><code>testcases/test_report.html</code> — 10/10, including tenant isolation &amp; KPI math cross-checked against raw SQL</td></tr>
+    <tr><td>Independently verified</td><td>Kiwi TCMS run — <code>dev.securityhub365.com/kiwi/runs/search/</code></td></tr>
+    <tr><td>Actually delivered</td><td>GitHub commit history</td></tr>
+  </table>
+  <p class="pitch-line">One docker-compose up for your MSSP.</p>
+</section>
+
+</body>
+</html>

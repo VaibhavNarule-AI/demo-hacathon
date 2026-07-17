@@ -1,0 +1,67 @@
+# Local-cluster manifest (Docker Desktop Kubernetes / kind / minikube with the
+# image loaded into the node). imagePullPolicy: Never means the image must
+# already exist locally -- devops/deploy.sh builds it with `docker build`
+# right before `kubectl apply -f k8s/`.
+#
+# Only /data is backed by a hostPath here (matching the docker-compose volume
+# for the SQLite file) -- logs/testcases inside the pod are ephemeral for this
+# path. docker-compose is the primary demo (host-visible logs/testcases);
+# this manifest is the "yes, this also runs on k8s" proof.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: soc-dashboard
+  labels:
+    app: soc-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: soc-dashboard
+  template:
+    metadata:
+      labels:
+        app: soc-dashboard
+    spec:
+      containers:
+        - name: soc-dashboard
+          image: soc-dashboard:v1-local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_PATH
+              value: /data/app.db
+          volumeMounts:
+            - name: soc-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: soc-data
+          hostPath:
+            path: /tmp/soc-data
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: soc-dashboard
+spec:
+  type: NodePort
+  selector:
+    app: soc-dashboard
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 30080
