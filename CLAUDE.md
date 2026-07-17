@@ -28,20 +28,26 @@ templates only. Business logic for a specific use case is built fresh into `back
   was delivered.
 
 ## Git Flow
-Remote is already configured: `origin -> https://github.com/VaibhavNarule-AI/demo-hacathon.git`
-on branch `main`.
+Remote is already configured: `origin -> https://github.com/VaibhavNarule-AI/demo-hacathon.git`.
+
+**Important:** `main` on that remote already holds an unrelated project (an HR
+interview note summarizer, 13 commits, its own `app/`, `DEPLOY.md`,
+`KNOWLEDGE_BASE.md`). This factory's work does **not** share history with it and
+must never be force-pushed over it. This project pushes to its own branch,
+`soc-dashboard`, instead.
 
 Only after `qe-guardian` passes and `/health` returns OK:
 ```
 git add .
 git commit -m "feat: working app with JWT RBAC"
-git push -u origin main
+git push -u origin soc-dashboard
 ```
-Never push before QE signs off.
+Never push before QE signs off. Never force-push `main` on this remote.
 
 ## External Integrations
-- **GitHub** — `origin` is set to the repo above. First push needs `-u origin main`
-  (already reflected in the command above); after that, plain `git push` works.
+- **GitHub** — `origin` is set to the repo above, but this project lives on the
+  `soc-dashboard` branch, not `main` (see Git Flow above for why). First push needs
+  `-u origin soc-dashboard`; after that, plain `git push` works.
 - **Kiwi TCMS** — configured. `qe-guardian` reads `KIWI_TCMS_URL`,
   `KIWI_TCMS_USERNAME`, `KIWI_TCMS_PASSWORD` from the local, gitignored `.env` (never
   commit or paste these into chat/logs) and pushes each test run there after
